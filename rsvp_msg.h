@@ -1,6 +1,8 @@
-
 #define PATH_MSG_TYPE 1   // RSVP-TE PATH Message Type
 #define RESV_MSG_TYPE 2   // RSVP-TE RESV Message Type
+//#deifne RECEIVE_PATH 1
+//#define RECEIVE_RESV 2
+#define IP_ADDRLEN 16
 
 #define SESSION 1
 #define HOP 3
@@ -50,17 +52,17 @@ struct rsvp_header {
     uint8_t msg_type;
     uint16_t checksum;
     uint8_t ttl;
-    uint16_t length;
     uint8_t reserved;
-    struct in_addr sender_ip;
-    struct in_addr receiver_ip;
+    uint16_t length;
+    //struct in_addr sender_ip;
+    //struct in_addr receiver_ip;
 };
 
 // common class Object
 struct class_obj {
+    uint16_t length;
     uint8_t class_num;
     uint8_t c_type;
-    uint16_t length;
 };
 
 // Label Object for PATH Message
@@ -117,6 +119,14 @@ struct label_object {
     uint32_t label;
 };
 
+// Style Object for RESV message
+struct style_object {
+	struct class_obj class_obj;
+        uint16_t flags;
+	uint16_t reserved;
+	uint32_t style;
+};
+        
 //Filter Spec Object for RESV Message
 struct Filter_spec_object {
     struct class_obj class_obj;
@@ -128,10 +138,12 @@ struct Filter_spec_object {
 
 
 
-void send_path_message(int, struct in_addr, struct in_addr);
-void send_resv_message(int, struct in_addr, struct in_addr);
+void send_path_message(int, struct in_addr, struct in_addr, uint8_t);
+void send_resv_message(int, struct in_addr, struct in_addr, uint8_t);
 void receive_resv_message(int, char[], struct sockaddr_in);
 void receive_path_message(int, char[], struct sockaddr_in);
 void get_resv_class_obj(int[]);
 void get_path_class_obj(int[]);
-
+int dst_reached(char []);
+void get_ip(char[], char[], char [], uint8_t *);
+extern int get_nexthop(const char *, const char *);
