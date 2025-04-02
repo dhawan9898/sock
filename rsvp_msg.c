@@ -75,7 +75,7 @@ void send_resv_message(int sock, struct in_addr sender_ip, struct in_addr receiv
                (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
         perror("Send failed");
     } else {
-        printf("Sent RESV message to %s with Label 1001\n", inet_ntoa(hop_obj->next_hop));
+        printf("Sent RESV message to %s with Label %ld\n", inet_ntoa(hop_obj->next_hop, p->in_label));
     }
 }
 

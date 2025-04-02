@@ -227,13 +227,17 @@ db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *
 
 /* Search for a path_msg node */
 void* search_node(db_node *node, int data, int (*cmp)(int, const void *)) {
-    if (!node || cmp(data, node->data) == 0)
+    if (!node) {
+        return NULL;
+    }
+    if (cmp(data, node->data) == 0)
         return node->data;
 
-    if (cmp(data, node->data) < 0) 
+    if (cmp(data, node->data) < 0) { 
         return search_node(node->left, data, cmp);
-
-    return search_node(node->right, data, cmp);
+    } else {
+        return search_node(node->right, data, cmp);
+    }
 }
 
 /* Free a path tree */

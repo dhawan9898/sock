@@ -161,7 +161,7 @@ int main() {
 
                         //get ip from the received resv msg
 			printf(" in resv msg type\n");
-                        get_ip(buffer, sender_ip, receiver_ip);
+                        get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
 			reached = dst_reached(sender_ip);
 
                         //printf("insert_resv_session\n");
