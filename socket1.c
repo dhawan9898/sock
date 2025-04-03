@@ -27,7 +27,7 @@ int main() {
     char srcip[16];
     char dstip[16];
     char nhip[16];
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
     int explicit = 0;
     char buffer[512];
     struct sockaddr_in sender_addr;
@@ -66,7 +66,7 @@ int main() {
     fgets(dstip, 16, stdin);
 
     printf("Enter tunnel_id: \n");
-    scanf("%hhd",&tunnel_id);
+    scanf("%hd",&tunnel_id);
     //printf("Is Explicit enable 1-yes 0-NO\n");
     //scanf("%d ", &explicit);
 

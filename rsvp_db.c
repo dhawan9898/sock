@@ -226,12 +226,12 @@ db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *
 
 
 /* Search for a path_msg node */
-void* search_node(db_node *node, int data, int (*cmp)(int, const void *)) {
-    if (!node) {
-        return NULL;
+db_node* search_node(db_node *node, int data, int (*cmp)(int, const void *)) {
+    if (node == NULL) {
+        return node;
     }
     if (cmp(data, node->data) == 0)
-        return node->data;
+        return node;
 
     if (cmp(data, node->data) < 0) { 
         return search_node(node->left, data, cmp);

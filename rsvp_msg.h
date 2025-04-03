@@ -138,12 +138,12 @@ struct Filter_spec_object {
 
 
 
-void send_path_message(int, struct in_addr, struct in_addr, uint8_t);
-void send_resv_message(int, struct in_addr, struct in_addr, uint8_t);
+void send_path_message(int, struct in_addr, struct in_addr, uint16_t);
+void send_resv_message(int, struct in_addr, struct in_addr, uint16_t);
 void receive_resv_message(int, char[], struct sockaddr_in);
 void receive_path_message(int, char[], struct sockaddr_in);
 void get_resv_class_obj(int[]);
 void get_path_class_obj(int[]);
 int dst_reached(char []);
-void get_ip(char[], char[], char [], uint8_t *);
+void get_ip(char[], char[], char [], uint16_t *);
 extern int get_nexthop(const char *, const char *);

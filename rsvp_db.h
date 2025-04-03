@@ -19,7 +19,7 @@ typedef struct path_msg {
     struct in_addr src_ip;
     struct in_addr dest_ip;
     struct in_addr nexthop_ip;
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
     uint8_t IFH;
     uint8_t interval;
     uint8_t setup_priority;
@@ -34,7 +34,7 @@ typedef struct resv_msg {
     struct in_addr src_ip;
     struct in_addr dest_ip;
     struct in_addr nexthop_ip;
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
     uint8_t IFH;
     uint8_t interval;
     uint32_t in_label;
@@ -65,7 +65,7 @@ typedef int (*cmp)(int, const void *);
 typedef int (*cmp1) (const void*, const void *);
 db_node* insert_node(db_node *, void *, cmp1 func);
 db_node* delete_node(db_node *, int, cmp func, int);
-void* search_node(db_node *, int, cmp func);
+db_node* search_node(db_node *, int, cmp func);
 void free_tree(db_node *);
 void display_tree(db_node *);
 

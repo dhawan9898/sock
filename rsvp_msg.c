@@ -14,7 +14,7 @@ extern db_node* path_tree;
 extern db_node* resv_tree;
 
 // Function to send an RSVP-TE RESV message with label assignment
-void send_resv_message(int sock, struct in_addr sender_ip, struct in_addr receiver_ip, uint8_t tunnel_id) {
+void send_resv_message(int sock, struct in_addr sender_ip, struct in_addr receiver_ip, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
     char resv_packet[256];
     char nhip[16];
@@ -29,7 +29,8 @@ void send_resv_message(int sock, struct in_addr sender_ip, struct in_addr receiv
     struct time_object *time_obj = (struct time_object*)(resv_packet + START_SENT_TIME_OBJ);
     struct label_object *label_obj = (struct label_object*)(resv_packet + START_SENT_LABEL);
 
-    resv_msg *p = (resv_msg*)search_node(resv_tree, tunnel_id, compare_resv_del);
+    db_node *resv_node = search_node(resv_tree, tunnel_id, compare_resv_del);
+    resv_msg *p = (resv_msg*)resv_node->data;
 
     // Populate RSVP RESV header
     resv->version_flags = 0x10;  // RSVP v1
@@ -75,7 +76,7 @@ void send_resv_message(int sock, struct in_addr sender_ip, struct in_addr receiv
                (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
         perror("Send failed");
     } else {
-        printf("Sent RESV message to %s with Label %ld\n", inet_ntoa(hop_obj->next_hop, p->in_label));
+        printf("Sent RESV message to %s with Label %d\n", inet_ntoa(hop_obj->next_hop), ntohl(p->in_label));
     }
 }
 
@@ -97,7 +98,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
     int i = 0;
     char src_ip[16], dst_ip[16];
     struct in_addr sender_ip, receiver_ip;
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
 
     printf("Listening for RSVP-TE PATH messages...\n");
 	
@@ -106,7 +107,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 
 	struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
 
-        path_msg *path_node = (path_msg*)search_node(path_tree, session_obj->tunnel_id, compare_path_del);
+        db_node *path_node = search_node(path_tree, session_obj->tunnel_id, compare_path_del);
         if(path_node == NULL)
 		path_tree = path_tree_insert(path_tree, buffer);
 
@@ -116,7 +117,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 	if(dst_reached(dst_ip)) {
 		printf("****reached the destiantion, end oF rsvp tunnel***\n");
 
-                resv_msg *resv_node = (resv_msg*)search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
+                db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
 	        if(resv_node == NULL)
        			resv_tree = resv_tree_insert(resv_tree, buffer);
 
@@ -131,7 +132,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 
 
 //Function to send PATH message for label request
-void send_path_message(int sock, struct in_addr sender_ip, struct in_addr receiver_ip, uint8_t tunnel_id) {
+void send_path_message(int sock, struct in_addr sender_ip, struct in_addr receiver_ip, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
     char path_packet[256];
     char nhip[16];
@@ -145,9 +146,8 @@ void send_path_message(int sock, struct in_addr sender_ip, struct in_addr receiv
     struct session_attr_object *session_attr_obj = (struct session_attr_object*)(path_packet + START_SENT_SESSION_ATTR_OBJ); 
     struct sender_temp_object *sender_temp_obj = (struct sender_temp_object*)(path_packet + START_SENT_SENDER_TEMP_OBJ);
 
-    //path_msg *p = (path_msg*)malloc(sizeof(path_msg));
-        path_msg *p = (path_msg*)search_node(path_tree, tunnel_id, compare_path_del);
-    //fetch_path_data(path_tree, tunnel_id, p);
+    db_node *path_node = search_node(path_tree, tunnel_id, compare_path_del);
+    path_msg *p = (path_msg*)path_node->data;
 
     // Populate RSVP PATH header
     path->version_flags = 0x10;  // RSVP v1
@@ -235,7 +235,7 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
     int i = 0;
     char src_ip[16], dst_ip[16];
     struct in_addr sender_ip, receiver_ip;
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
 
     printf("Listening for RSVP-TE RESV messages...\n");
 
@@ -244,7 +244,7 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
 		inet_ntoa(sender_addr.sin_addr), ntohl(label_obj->label));
 
 	struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
-     resv_msg *resv_node = (resv_msg*)search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
+     db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
      if(resv_node == NULL)
          resv_tree = resv_tree_insert(resv_tree, buffer);
 
@@ -275,13 +275,13 @@ int dst_reached(char ip[]) {
 }
 
 
-void get_ip(char buffer[], char sender_ip[], char receiver_ip[], uint8_t *tunnel_id) {
+void get_ip(char buffer[], char sender_ip[], char receiver_ip[], uint16_t *tunnel_id) {
 
         struct session_object *temp = (struct session_object*)(buffer+START_RECV_SESSION_OBJ);
 
 	inet_ntop(AF_INET, &temp->src_ip, sender_ip, 16);
 	inet_ntop(AF_INET, &temp->dst_ip, receiver_ip, 16); 
-    tunnel_id = temp->tunnel_id;
+        *tunnel_id = temp->tunnel_id;
 
         //printf(" src ip is %s \n",sender_ip);
 	//printf(" dst ip is %s \n", receiver_ip);
