@@ -13,6 +13,8 @@ struct in_addr sender_ip, receiver_ip;
 
 extern struct session* path_head;
 extern struct session* resv_head;
+extern db_node* resv_tree;
+extern db_node* path_tree;
 
 #define TIMEOUT 90
 #define INTERVAL 30
@@ -46,6 +48,8 @@ void path_timer_handler(union sigval sv) {
                 if((now - temp->last_path_time) > TIMEOUT) {
                         printf("RSVP path session expired: %s\t-->%s\n",temp->sender, temp->receiver);
                         resv_head = delete_session(temp, temp->sender, temp->receiver);
+                        resv_tree = delete_node(resv_tree, temp->tunnel_id, compare_resv_del, 0);
+                        display_tree(resv_tree, 0);
                 } else if((now - temp->last_path_time) < INTERVAL) {
                         printf(" less than 30 sec\n");
                         temp = temp->next;
@@ -89,6 +93,8 @@ void resv_timer_handler(union sigval sv) {
                 if((now - temp->last_path_time) > TIMEOUT) {
 			printf("RSVP resv session expired: %s\t-->%s\n",temp->sender, temp->receiver);
                         path_head = delete_session(temp, temp->sender, temp->receiver);
+                        path_tree = delete_node(path_tree, temp->tunnel_id, compare_path_del, 1);
+                        display_tree(path_tree, 1);
                 } else if((now - temp->last_path_time) < INTERVAL) {
                         printf(" less than 30 sec\n");
                         temp = temp->next;

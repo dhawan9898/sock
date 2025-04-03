@@ -110,6 +110,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
         db_node *path_node = search_node(path_tree, session_obj->tunnel_id, compare_path_del);
         if(path_node == NULL)
 		path_tree = path_tree_insert(path_tree, buffer);
+        display_tree(path_tree, 1);
 
 	get_ip(buffer, src_ip, dst_ip, &tunnel_id);
 	inet_pton(AF_INET, src_ip, &sender_ip);
@@ -120,6 +121,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
                 db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
 	        if(resv_node == NULL)
        			resv_tree = resv_tree_insert(resv_tree, buffer);
+        display_tree(resv_tree, 0);
 
 		send_resv_message(sock, sender_ip, receiver_ip, session_obj->tunnel_id);
 	} else {
@@ -247,6 +249,7 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
      db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
      if(resv_node == NULL)
          resv_tree = resv_tree_insert(resv_tree, buffer);
+        display_tree(resv_tree, 0);
 
     //check whether we have reached the head of RSVP tunnel
     //If not reached continue distributing the label  

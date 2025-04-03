@@ -59,6 +59,7 @@ int main() {
     // ------------------------------------------------------
 	
     //ip = (struct src_dst_ip *)malloc(sizeof(struct src_dst_ip ));
+    for (int i  = 0; i < 3; i++){
     printf("Enter src ip : \n");
     fgets(srcip, 16, stdin);
 	
@@ -103,7 +104,8 @@ int main() {
     path->name[sizeof(path->name) - 1] = '\0';
 
     path_tree = insert_node(path_tree, (void*)path, compare_path_insert); 
-    
+    display_tree(path_tree, 1);
+
     inet_pton(AF_INET, srcip, &send_ip);
     inet_pton(AF_INET, dstip, &rece_ip);
 	
@@ -116,7 +118,7 @@ int main() {
     // Send RSVP-TE PATH Message
     send_path_message(sock, send_ip, rece_ip, path->tunnel_id);
     //---------------------------------------------------------
-
+    }
     //path_event_handler(); //send path msg
     int reached = 0;
 	 

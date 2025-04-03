@@ -6,6 +6,9 @@ struct session* sess = NULL;
 struct session* head = NULL;
 time_t now = 0;
 char nhip[16];
+char source_ip[16];
+char destination_ip[16];
+char next_hop_ip[16];
 
 	
 struct session* insert_session(struct session* sess, uint8_t t_id, char sender[], char receiver[], uint8_t dest) {
@@ -250,13 +253,41 @@ void free_tree(db_node *node) {
 }
 
 /* Display path tree (inorder traversal) */
-void display_tree(db_node *node) {
+void display_tree(db_node *node, int msg) {
     if (!node) return;
-    display_tree(node->left);
+    display_tree(node->left, msg);
+    if(msg) {
+        path_msg* p = node->data;
+                inet_ntop(AF_INET, &p->src_ip, source_ip, 16);
+                inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16);
+                inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16);
+        printf("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s\n",
+                p->tunnel_id,
+                //inet_ntop(AF_INET, &p->src_ip, source_ip, 16),
+                //inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16),
+                //inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16));
+                source_ip,
+                destination_ip,
+                next_hop_ip);
+    } else {
+        resv_msg* r = node->data;
+                inet_ntop(AF_INET, &r->src_ip, source_ip, 16);
+                inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16);
+                inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16);
+        printf("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s, In_label: %d, Out_label: %d\n",
+                r->tunnel_id,
+                //inet_ntop(AF_INET, &r->src_ip, source_ip, 16),
+                //inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16),
+                //inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16),
+                source_ip,
+                destination_ip,
+                next_hop_ip,
+                r->in_label,
+                r->out_label);
+    }
     //printf("Tunnel ID: %d, Name: %s\n", node->data->tunnel_id, node->data->name);
-    display_tree(node->right);
+    display_tree(node->right, msg);
 }
-
 
 //Fetch information from receive buffer
 //-------------------------------------

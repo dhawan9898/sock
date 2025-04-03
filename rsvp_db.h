@@ -67,7 +67,7 @@ db_node* insert_node(db_node *, void *, cmp1 func);
 db_node* delete_node(db_node *, int, cmp func, int);
 db_node* search_node(db_node *, int, cmp func);
 void free_tree(db_node *);
-void display_tree(db_node *);
+void display_tree(db_node *, int);
 
 struct session* insert_session(struct session*, uint8_t, char[], char[], uint8_t);
 struct session* delete_session(struct session*, char[], char[]);
