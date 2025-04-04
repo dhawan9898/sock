@@ -4,6 +4,7 @@
 #include<stdint.h>
 #include<arpa/inet.h>
 #include<netinet/in.h>
+#include<time.h>
 
 struct session {
     char sender[16];

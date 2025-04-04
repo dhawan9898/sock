@@ -108,8 +108,9 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 	struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
 
         db_node *path_node = search_node(path_tree, session_obj->tunnel_id, compare_path_del);
-        if(path_node == NULL)
+        if(path_node == NULL){
 		path_tree = path_tree_insert(path_tree, buffer);
+        }
         display_tree(path_tree, 1);
 
 	get_ip(buffer, src_ip, dst_ip, &tunnel_id);
@@ -119,8 +120,9 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 		printf("****reached the destiantion, end oF rsvp tunnel***\n");
 
                 db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
-	        if(resv_node == NULL)
+	        if(resv_node == NULL){
        			resv_tree = resv_tree_insert(resv_tree, buffer);
+            }
         display_tree(resv_tree, 0);
 
 		send_resv_message(sock, sender_ip, receiver_ip, session_obj->tunnel_id);
@@ -247,8 +249,9 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
 
 	struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
      db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
-     if(resv_node == NULL)
+     if(resv_node == NULL){
          resv_tree = resv_tree_insert(resv_tree, buffer);
+     }
         display_tree(resv_tree, 0);
 
     //check whether we have reached the head of RSVP tunnel

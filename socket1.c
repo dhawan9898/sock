@@ -60,14 +60,16 @@ int main() {
 	
     //ip = (struct src_dst_ip *)malloc(sizeof(struct src_dst_ip ));
     for (int i  = 0; i < 3; i++){
+    printf("Enter tunnel_id: \n");
+    scanf("%hd",&tunnel_id);
+    getchar();
+
     printf("Enter src ip : \n");
     fgets(srcip, 16, stdin);
 	
     printf("Enter dst ip: \n");
     fgets(dstip, 16, stdin);
 
-    printf("Enter tunnel_id: \n");
-    scanf("%hd",&tunnel_id);
     //printf("Is Explicit enable 1-yes 0-NO\n");
     //scanf("%d ", &explicit);
 

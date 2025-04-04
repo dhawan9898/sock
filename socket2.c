@@ -29,7 +29,7 @@ int main() {
     char buffer[512];
     char sender_ip[16], receiver_ip[16];
     uint16_t tunnel_id;
-    u_int8_t reached = 0;
+    uint8_t reached = 0;
 
     struct sockaddr_in addr;
     sock = socket(AF_INET, SOCK_RAW, RSVP_PROTOCOL);

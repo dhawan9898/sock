@@ -32,7 +32,7 @@ struct session* insert_session(struct session* sess, uint8_t t_id, char sender[]
                         if((strcmp(sess->sender, sender) == 0) &&
                            (strcmp(sess->receiver, receiver) == 0)) {
 				sess->last_path_time = now;
-                                return;
+                                return NULL;
                         }
 			local = sess;
                         sess=sess->next;
@@ -179,7 +179,7 @@ db_node* min_node(db_node* node) {
 
 /* Delete a node from path_msg AVL tree */
 db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *), int msg) {
-    if (node == NULL) return ;
+    if (node == NULL) return NULL;
 
     if (cmp(tunnel_id, node->data) < 0)
         node->left = delete_node(node->left, tunnel_id, cmp, msg);
