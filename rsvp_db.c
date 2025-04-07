@@ -179,7 +179,7 @@ db_node* min_node(db_node* node) {
 
 /* Delete a node from path_msg AVL tree */
 db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *), int msg) {
-    if (node == NULL) return NULL;
+    if (node == NULL) return;
 
     if (cmp(tunnel_id, node->data) < 0)
         node->left = delete_node(node->left, tunnel_id, cmp, msg);
@@ -306,8 +306,9 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[]) {
 
     //get and assign nexthop
     get_nexthop(inet_ntoa(p->dest_ip), nhip);
-    if(strcmp(nhip, " ") == 0)
-        inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+    if(strcmp(nhip, " ") == 0) {
+        inet_pton(AF_INET, "-", &p->nexthop_ip);
+    }
     else    
         inet_pton(AF_INET, nhip, &p->nexthop_ip);
 
@@ -334,8 +335,9 @@ db_node* resv_tree_insert(db_node* resv_tree, char buffer[]) {
 
     //get and assign nexthop
     get_nexthop(inet_ntoa(p->src_ip), nhip);
-    if(strcmp(nhip, " ") == 0)
-        inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+    if(strcmp(nhip, " ") == 0) {
+        inet_pton(AF_INET, "-", &p->nexthop_ip);
+    }
     else 
         inet_pton(AF_INET, nhip, &p->nexthop_ip);	
 

@@ -35,7 +35,7 @@ int is_ip_in_subnet(const char *ip, const char *subnet, int prefix_len) {
     return 0; // IP is not in the subnet
 }
 
-int rtnl_receive(int fd, struct msghdr *msg, int flags)
+/*int rtnl_receive(int fd, struct msghdr *msg, int flags)
 {
     int len;
 
@@ -54,7 +54,7 @@ int rtnl_receive(int fd, struct msghdr *msg, int flags)
     }
 
     return len;
-}
+}*/
 
 static int rtnl_recvmsg(int fd, struct msghdr *msg, char **answer)
 {
@@ -65,7 +65,7 @@ static int rtnl_recvmsg(int fd, struct msghdr *msg, char **answer)
     iov->iov_base = NULL;
     iov->iov_len = 0;
 
-    len = rtnl_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
+    len = recv(fd, NULL, 0, MSG_PEEK | MSG_TRUNC);
 
     if (len < 0) {
         return len;
@@ -81,7 +81,7 @@ static int rtnl_recvmsg(int fd, struct msghdr *msg, char **answer)
     iov->iov_base = buf;
     iov->iov_len = len;
 
-    len = rtnl_receive(fd, msg, 0);
+    len = recv(fd, buf, len, 0);
 
     if (len < 0) {
         free(buf);
@@ -279,9 +279,9 @@ int get_route_dump_response(int sock)
             return -1;
         }
 
-        if (nladdr.nl_pid != 0) {
-            continue;
-        }
+        //if (nladdr.nl_pid != 0) {
+        //    continue;
+        //}
 
         if (h->nlmsg_type == NLMSG_ERROR) {
             perror("netlink reported error");

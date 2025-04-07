@@ -58,7 +58,7 @@ int main() {
     // only in PE1 or PE2 where we configure the tunnel for RSVP.
     // ------------------------------------------------------
 
-    for (int i  = 0; i < 3; i++){
+    for (int i  = 0; i < 1; i++){
         printf("Enter tunnel_id: \n");
         scanf("%hd",&tunnel_id);
         getchar();
@@ -82,14 +82,18 @@ int main() {
 
 
         path_msg *path = malloc(sizeof(path_msg));
+        //path_msg path;
         path->tunnel_id = tunnel_id;
         inet_pton(AF_INET, srcip, &path->src_ip);
         inet_pton(AF_INET, dstip, &path->dest_ip);
 
         //get and assign nexthop
-        get_nexthop(inet_ntoa(path->dest_ip), nhip);
-        if(strcmp(nhip, " ") == 0)
-            inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
+        get_nexthop(dstip, nhip);
+        if(strcmp(nhip, " ") == 0) {
+            inet_pton(AF_INET, "-", &path->nexthop_ip);
+            printf("dont have route to the destination ip %s\n",inet_ntoa(path->dest_ip));
+            continue;
+        }
         else 
             inet_pton(AF_INET, nhip, &path->nexthop_ip);	
 
@@ -118,7 +122,7 @@ int main() {
         send_path_message(sock, send_ip, rece_ip, path->tunnel_id);
     }
     //---------------------------------------------------------
-    //path_event_handler(); //send path msg
+    path_event_handler(); //send path msg
     int reached = 0;
 
     while(1) {
