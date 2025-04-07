@@ -9,7 +9,7 @@
 struct session {
     char sender[16];
     char receiver[16];
-    uint8_t tunnel_id;
+    uint16_t tunnel_id;
     time_t last_path_time;
     uint8_t dest;
     struct session *next;

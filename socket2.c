@@ -19,9 +19,9 @@ db_node *path_tree;
 db_node *resv_tree;
 
 uint32_t ip_to_int(const char* ip_str) {
-	struct in_addr ip_addr;
-	inet_aton(ip_str, &ip_addr);
-	return ntohl(ip_addr.s_addr);
+    struct in_addr ip_addr;
+    inet_aton(ip_str, &ip_addr);
+    return ntohl(ip_addr.s_addr);
 }
 
 int main() {
@@ -37,75 +37,75 @@ int main() {
         perror("Socket creation failed");
         return 1;
     }
-  
+
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
 
     if(bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-	perror("binding failed");
-	close(sock);
-	exit(EXIT_FAILURE);
+        perror("binding failed");
+        close(sock);
+        exit(EXIT_FAILURE);
     }
 
     struct sockaddr_in sender_addr;
     socklen_t addr_len = sizeof(sender_addr);
 
     while(1) {
-	printf("Waiting to receive mesgae\n");
-   	memset(buffer, 0, sizeof(buffer));
-	int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
-       				(struct sockaddr*)&sender_addr, &addr_len);
-       	if (bytes_received < 0) {
-	        perror("Receive failed");
-       		continue;
-	}
+        printf("Waiting to receive mesgae\n");
+        memset(buffer, 0, sizeof(buffer));
+        int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
+                (struct sockaddr*)&sender_addr, &addr_len);
+        if (bytes_received < 0) {
+            perror("Receive failed");
+            continue;
+        }
 
-       	struct rsvp_header *rsvp = (struct rsvp_header*)(buffer+20);
+        struct rsvp_header *rsvp = (struct rsvp_header*)(buffer+20);
 
-	//printf("---- %d\n",rsvp->msg_type);
-	switch(rsvp->msg_type) {
+        //printf("---- %d\n",rsvp->msg_type);
+        switch(rsvp->msg_type) {
 
-		case PATH_MSG_TYPE: 
-		
-			//Receive PATH Message
+            case PATH_MSG_TYPE: 
 
-			resv_event_handler();
-			// get ip from the received path packet
-			get_ip(buffer, sender_ip, receiver_ip,&tunnel_id);
-		        reached = dst_reached(receiver_ip);
-	
-			printf("insert_path_session\n");
-	                if(path_head == NULL) {
-       		       		path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
-               		} else {
-                       	        insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
-                        }
-			
-			receive_path_message(sock,buffer,sender_addr);	
+                //Receive PATH Message
 
-			break;
+                resv_event_handler();
+                // get ip from the received path packet
+                get_ip(buffer, sender_ip, receiver_ip,&tunnel_id);
+                reached = dst_reached(receiver_ip);
 
-		case RESV_MSG_TYPE:
+                printf("insert_path_session\n");
+                if(path_head == NULL) {
+                    path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
+                } else {
+                    insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
+                }
 
-			// Receive RSVP-TE RESV Message
+                receive_path_message(sock,buffer,sender_addr);	
 
-			path_event_handler();
-			//get ip from the received resv msg
- 			get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-			reached = dst_reached(sender_ip);
+                break;
 
-                        printf("insert_resv_session\n");
-                        if(resv_head == NULL) {
-                                resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
-                        } else {
-                                insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
-                        }
-		
-			receive_resv_message(sock,buffer,sender_addr);
+            case RESV_MSG_TYPE:
 
-			break;
+                // Receive RSVP-TE RESV Message
 
-	}
+                path_event_handler();
+                //get ip from the received resv msg
+                get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                reached = dst_reached(sender_ip);
+
+                printf("insert_resv_session\n");
+                if(resv_head == NULL) {
+                    resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
+                } else {
+                    insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
+                }
+
+                receive_resv_message(sock,buffer,sender_addr);
+
+                break;
+
+        }
     }
     close(sock);
     return 0;

@@ -50,136 +50,132 @@ int main() {
     addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-	perror("binding failed");
-	close(sock);
-	exit(EXIT_FAILURE);
+        perror("binding failed");
+        close(sock);
+        exit(EXIT_FAILURE);
     }
 
     // only in PE1 or PE2 where we configure the tunnel for RSVP.
     // ------------------------------------------------------
-	
-    //ip = (struct src_dst_ip *)malloc(sizeof(struct src_dst_ip ));
+
     for (int i  = 0; i < 3; i++){
-    printf("Enter tunnel_id: \n");
-    scanf("%hd",&tunnel_id);
-    getchar();
+        printf("Enter tunnel_id: \n");
+        scanf("%hd",&tunnel_id);
+        getchar();
 
-    printf("Enter src ip : \n");
-    fgets(srcip, 16, stdin);
-	
-    printf("Enter dst ip: \n");
-    fgets(dstip, 16, stdin);
+        printf("Enter src ip : \n");
+        fgets(srcip, 16, stdin);
 
-    //printf("Is Explicit enable 1-yes 0-NO\n");
-    //scanf("%d ", &explicit);
+        printf("Enter dst ip: \n");
+        fgets(dstip, 16, stdin);
 
-    int len = strlen(srcip);
-    if(srcip[len-1] == '\n') 
-	srcip[len-1] = '\0';
+        //printf("Is Explicit enable 1-yes 0-NO\n");
+        //scanf("%d ", &explicit);
 
-    strlen(dstip);
-    if(dstip[len-1] == '\n')
-        dstip[len-1] = '\0';
+        int len = strlen(srcip);
+        if(srcip[len-1] == '\n') 
+            srcip[len-1] = '\0';
+
+        strlen(dstip);
+        if(dstip[len-1] == '\n')
+            dstip[len-1] = '\0';
 
 
-    path_msg *path = malloc(sizeof(path_msg));
-    path->tunnel_id = tunnel_id;
-    inet_pton(AF_INET, srcip, &path->src_ip);
-    inet_pton(AF_INET, dstip, &path->dest_ip);
-    //path->src_ip.s_addr = inet_addr("192.168.11.10");
-    //path->dest_ip.s_addr = inet_addr("192.168.11.11");
+        path_msg *path = malloc(sizeof(path_msg));
+        path->tunnel_id = tunnel_id;
+        inet_pton(AF_INET, srcip, &path->src_ip);
+        inet_pton(AF_INET, dstip, &path->dest_ip);
 
-    //get and assign nexthop
-    get_nexthop(inet_ntoa(path->dest_ip), nhip);
-    if(strcmp(nhip, " ") == 0)
-	inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
-    else 
-	inet_pton(AF_INET, nhip, &path->nexthop_ip);	
+        //get and assign nexthop
+        get_nexthop(inet_ntoa(path->dest_ip), nhip);
+        if(strcmp(nhip, " ") == 0)
+            inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
+        else 
+            inet_pton(AF_INET, nhip, &path->nexthop_ip);	
 
-    path->interval = 30;
-    path->setup_priority = 7;
-    path->hold_priority = 7;
-    path->flags = 0;
-    path->lsp_id = 1;
-    path->IFH = 123;
-    strncpy(path->name, "Path1", sizeof(path->name) - 1);
-    path->name[sizeof(path->name) - 1] = '\0';
+        path->interval = 30;
+        path->setup_priority = 7;
+        path->hold_priority = 7;
+        path->flags = 0;
+        path->lsp_id = 1;
+        path->IFH = 123;
+        strncpy(path->name, "Path1", sizeof(path->name) - 1);
+        path->name[sizeof(path->name) - 1] = '\0';
 
-    path_tree = insert_node(path_tree, (void*)path, compare_path_insert); 
-    display_tree(path_tree, 1);
+        path_tree = insert_node(path_tree, (void*)path, compare_path_insert); 
+        display_tree(path_tree, 1);
 
-    inet_pton(AF_INET, srcip, &send_ip);
-    inet_pton(AF_INET, dstip, &rece_ip);
-	
-    if(resv_head == NULL) {
-	resv_head = insert_session(resv_head, tunnel_id, srcip, dstip, 1);
-    } else {
-        insert_session(resv_head, tunnel_id, srcip, dstip, 1);
+        inet_pton(AF_INET, srcip, &send_ip);
+        inet_pton(AF_INET, dstip, &rece_ip);
+
+        if(resv_head == NULL) {
+            resv_head = insert_session(resv_head, tunnel_id, srcip, dstip, 1);
+        } else {
+            insert_session(resv_head, tunnel_id, srcip, dstip, 1);
+        }
+
+        // Send RSVP-TE PATH Message
+        send_path_message(sock, send_ip, rece_ip, path->tunnel_id);
     }
-
-    // Send RSVP-TE PATH Message
-    send_path_message(sock, send_ip, rece_ip, path->tunnel_id);
     //---------------------------------------------------------
-    }
     //path_event_handler(); //send path msg
     int reached = 0;
-	 
+
     while(1) {
-   	memset(buffer, 0, sizeof(buffer));
-	int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
-       				(struct sockaddr*)&sender_addr, &addr_len);
-       	if (bytes_received < 0) {
-	        perror("Receive failed");
-       		continue;
-	}
+        memset(buffer, 0, sizeof(buffer));
+        int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
+                (struct sockaddr*)&sender_addr, &addr_len);
+        if (bytes_received < 0) {
+            perror("Receive failed");
+            continue;
+        }
 
-       	struct rsvp_header *rsvp = (struct rsvp_header*)(buffer+20);
+        struct rsvp_header *rsvp = (struct rsvp_header*)(buffer+20);
 
-	switch(rsvp->msg_type) {
+        switch(rsvp->msg_type) {
 
-		case PATH_MSG_TYPE:
-	
-			//Receive PATH Message
-		
-			resv_event_handler();
-                        // get ip from the received path packet
-			printf(" in path msg type\n");
-			get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-                        reached = dst_reached(sender_ip);
+            case PATH_MSG_TYPE:
 
-                        //printf("insert_path_session\n");
-                        if(path_head == NULL) {
-                                path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
-                        } else {
-                                insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
-                        }
+                //Receive PATH Message
+                resv_event_handler();
+                // get ip from the received path packet
+                printf(" in path msg type\n");
+                get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                reached = dst_reached(sender_ip);
 
-                        receive_path_message(sock,buffer,sender_addr);
+                printf("insert_path_session\n");
+                if(path_head == NULL) {
+                    path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
+                } else {
+                    insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
+                }
 
-                        break;
+                receive_path_message(sock,buffer,sender_addr);
 
-                case RESV_MSG_TYPE:
+                break;
 
-		      	// Receive RSVP-TE RESV Message	
-  			path_event_handler();
+            case RESV_MSG_TYPE:
 
-                        //get ip from the received resv msg
-			printf(" in resv msg type\n");
-                        get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-			reached = dst_reached(sender_ip);
+                // Receive RSVP-TE RESV Message	
+                path_event_handler();
 
-                        //printf("insert_resv_session\n");
-                        if(resv_head == NULL) {
-                                resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
-                        } else {
-                                insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
-                        }
+                //get ip from the received resv msg
+                printf(" in resv msg type\n");
+                get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                reached = dst_reached(sender_ip);
 
-                        receive_resv_message(sock,buffer,sender_addr);
-                        break;
-	}
+                printf("insert_resv_session\n");
+                if(resv_head == NULL) {
+                    resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
+                } else {
+                    insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
+                }
+
+                receive_resv_message(sock,buffer,sender_addr);
+                break;
+        }
     }
-    
+
     close(sock);
     return 0;
 }

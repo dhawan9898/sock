@@ -10,75 +10,75 @@ char source_ip[16];
 char destination_ip[16];
 char next_hop_ip[16];
 
-	
+
 struct session* insert_session(struct session* sess, uint8_t t_id, char sender[], char receiver[], uint8_t dest) {
-        now = time(NULL);
-        printf("insert session\n");
-        if(sess == NULL) {
-                struct session *temp = (struct session*)malloc(sizeof(struct session));
-                if(temp < 0)
-                         printf("cannot allocate dynamic memory]n");
+    now = time(NULL);
+    printf("insert session\n");
+    if(sess == NULL) {
+        struct session *temp = (struct session*)malloc(sizeof(struct session));
+        if(temp < 0)
+            printf("cannot allocate dynamic memory]n");
 
-                temp->last_path_time = now;
-                strcpy(temp->sender, sender);
-                strcpy(temp->receiver, receiver);
-		temp->dest = dest;
-		temp->tunnel_id = t_id;
-                temp->next = NULL;
-                return temp;
-        } else {
-		struct session *local = NULL;
-                while(sess != NULL) {
-                        if((strcmp(sess->sender, sender) == 0) &&
-                           (strcmp(sess->receiver, receiver) == 0)) {
-				sess->last_path_time = now;
-                                return NULL;
-                        }
-			local = sess;
-                        sess=sess->next;
-                }
-
-                struct session *temp = (struct session*)malloc(sizeof(struct session));
-                if(sess < 0)
-                         printf("cannot allocate dynamic memory\n");
-
-                temp->last_path_time = now;
-		strcpy(temp->sender, sender);
-                strcpy(temp->receiver, receiver);
-		temp->dest = dest;
-		temp->tunnel_id = t_id;
-                temp->next = NULL;
-
-                local->next = temp;
+        temp->last_path_time = now;
+        strcpy(temp->sender, sender);
+        strcpy(temp->receiver, receiver);
+        temp->dest = dest;
+        temp->tunnel_id = t_id;
+        temp->next = NULL;
+        return temp;
+    } else {
+        struct session *local = NULL;
+        while(sess != NULL) {
+            if((strcmp(sess->sender, sender) == 0) &&
+                    (strcmp(sess->receiver, receiver) == 0)) {
+                sess->last_path_time = now;
+                return NULL;
+            }
+            local = sess;
+            sess=sess->next;
         }
+
+        struct session *temp = (struct session*)malloc(sizeof(struct session));
+        if(sess < 0)
+            printf("cannot allocate dynamic memory\n");
+
+        temp->last_path_time = now;
+        strcpy(temp->sender, sender);
+        strcpy(temp->receiver, receiver);
+        temp->dest = dest;
+        temp->tunnel_id = t_id;
+        temp->next = NULL;
+
+        local->next = temp;
+    }
 }
 
 
 struct session* delete_session(struct session* sess, char sender[], char receiver[]) { 
 
-        struct session *temp = NULL;
-	struct session *head = sess;
+    struct session *temp = NULL;
+    struct session *head = sess;
 
-        printf("delete session\n");
-        while(sess != NULL) {
-                if((head == sess) &&
-                   (strcmp(sess->sender, sender) == 0) &&
-                   (strcmp(sess->receiver, receiver) == 0)) {
-                        temp = head;
-                        head = head->next;
-                        free(temp);
-                        return head;
-                } else {
-                        if((strcmp(sess->sender, sender) == 0) &&
-                           (strcmp(sess->receiver, receiver) == 0)) {
-				temp = sess->next;
-                                *sess = *sess->next;
-                                free(temp);
-                        }else{
-                                sess = sess->next;
-                        }
-                }
+    printf("delete session\n");
+    while(sess != NULL) {
+        if((head == sess) &&
+                (strcmp(sess->sender, sender) == 0) &&
+                (strcmp(sess->receiver, receiver) == 0)) {
+            temp = head;
+            head = head->next;
+            free(temp);
+            return head;
+        } else {
+            if((strcmp(sess->sender, sender) == 0) &&
+                    (strcmp(sess->receiver, receiver) == 0)) {
+                temp = sess->next;
+                *sess = *sess->next;
+                free(temp);
+            }else{
+                sess = sess->next;
+            }
         }
+    }
 }
 
 
@@ -95,11 +95,11 @@ int compare_resv_insert(const void *a, const void *b) {
 }
 
 int compare_path_del(int id, const void *b) {
-        return (id - ((path_msg *) b)->tunnel_id);
+    return (id - ((path_msg *) b)->tunnel_id);
 }
 
 int compare_resv_del(int id, const void *b) {
-        return (id - ((resv_msg *) b)->tunnel_id);
+    return (id - ((resv_msg *) b)->tunnel_id);
 }
 
 /* Right rotation */
@@ -198,10 +198,10 @@ db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *
         } else {
             db_node* temp = min_node(node->right);
             node->data = temp->data;
-	    if(msg)
-            	node->right = delete_node(node->right, ((path_msg *)temp->data)->tunnel_id, cmp, msg);
-	    else
-		node->right = delete_node(node->right, ((resv_msg *)temp->data)->tunnel_id, cmp, msg);
+            if(msg)
+                node->right = delete_node(node->right, ((path_msg *)temp->data)->tunnel_id, cmp, msg);
+            else
+                node->right = delete_node(node->right, ((resv_msg *)temp->data)->tunnel_id, cmp, msg);
         }
     }
 
@@ -258,34 +258,27 @@ void display_tree(db_node *node, int msg) {
     display_tree(node->left, msg);
     if(msg) {
         path_msg* p = node->data;
-                inet_ntop(AF_INET, &p->src_ip, source_ip, 16);
-                inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16);
-                inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16);
+        inet_ntop(AF_INET, &p->src_ip, source_ip, 16);
+        inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16);
+        inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16);
         printf("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s\n",
                 p->tunnel_id,
-                //inet_ntop(AF_INET, &p->src_ip, source_ip, 16),
-                //inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16),
-                //inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16));
                 source_ip,
                 destination_ip,
                 next_hop_ip);
     } else {
         resv_msg* r = node->data;
-                inet_ntop(AF_INET, &r->src_ip, source_ip, 16);
-                inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16);
-                inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16);
+        inet_ntop(AF_INET, &r->src_ip, source_ip, 16);
+        inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16);
+        inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16);
         printf("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s, In_label: %d, Out_label: %d\n",
                 r->tunnel_id,
-                //inet_ntop(AF_INET, &r->src_ip, source_ip, 16),
-                //inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16),
-                //inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16),
                 source_ip,
                 destination_ip,
                 next_hop_ip,
                 r->in_label,
                 r->out_label);
     }
-    //printf("Tunnel ID: %d, Name: %s\n", node->data->tunnel_id, node->data->name);
     display_tree(node->right, msg);
 }
 
@@ -310,7 +303,7 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[]) {
     p->lsp_id = 1;
     strncpy(p->name, session_attr_obj->Name, sizeof(session_attr_obj->Name) - 1);
     p->name[sizeof(p->name) - 1] = '\0';
- 
+
     //get and assign nexthop
     get_nexthop(inet_ntoa(p->dest_ip), nhip);
     if(strcmp(nhip, " ") == 0)
@@ -335,16 +328,16 @@ db_node* resv_tree_insert(db_node* resv_tree, char buffer[]) {
 
     get_nexthop(inet_ntoa(p->dest_ip), nhip);
     if(strcmp(nhip, " ") == 0)
-	p->in_label = htonl(3);
+        p->in_label = htonl(3);
     else
-	p->in_label = htonl(100);  //get the label from the label management;	
+        p->in_label = htonl(100);  //get the label from the label management;	
 
     //get and assign nexthop
     get_nexthop(inet_ntoa(p->src_ip), nhip);
     if(strcmp(nhip, " ") == 0)
-	inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+        inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
     else 
-	inet_pton(AF_INET, nhip, &p->nexthop_ip);	
+        inet_pton(AF_INET, nhip, &p->nexthop_ip);	
 
     return insert_node(resv_tree, p, compare_resv_insert);
 }
