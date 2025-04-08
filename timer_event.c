@@ -45,29 +45,31 @@ void path_timer_handler(union sigval sv) {
     if(temp ==  NULL)
         printf("temp is nuLL");
     while(temp != NULL) {
+
+	if(temp->dest) {
+            printf("--------sending  path message\n");
+
+            //inet_pton(AF_INET, temp->sender, &sender_ip);
+            //inet_pton(AF_INET, temp->receiver, &receiver_ip);
+
+            // Send RSVP-TE PATH Message
+            send_path_message(sock, temp->tunnel_id);
+        }
+
+
         if((now - temp->last_path_time) > TIMEOUT) {
-            if(!temp->dest){
-                printf("RSVP path session expired: %s\t-->%s\n",temp->sender, temp->receiver);
-                resv_head = delete_session(temp, temp->sender, temp->receiver);
-                resv_tree = delete_node(resv_tree, temp->tunnel_id, compare_resv_del, 0);
+		if(!temp->dest) {
+			printf("RSVP path session expired: %s\t-->%s\n",temp->sender, temp->receiver);
+			resv_head = delete_session(temp, temp->sender, temp->receiver);
+		}
+		resv_tree = delete_node(resv_tree, temp->tunnel_id, compare_resv_del, 0);
                 display_tree(resv_tree, 0);
-            }
         } else if((now - temp->last_path_time) < INTERVAL) {
             printf(" less than 30 sec\n");
             temp = temp->next;
             continue;
         } else {
-            if(temp->dest) {
-                printf("--------sending  path message\n");
-
-                inet_pton(AF_INET, temp->sender, &sender_ip);
-                inet_pton(AF_INET, temp->receiver, &receiver_ip);
-
-                // Send RSVP-TE PATH Message
-                send_path_message(sock, sender_ip, receiver_ip, temp->tunnel_id);
-            } else {
                 printf("not received resv msg\n");
-            }
         }
         temp = temp->next;
     }
@@ -109,7 +111,7 @@ void resv_timer_handler(union sigval sv) {
                 inet_pton(AF_INET, temp->receiver, &receiver_ip);
 
                 // Send RSVP-TE RESV Message
-                send_resv_message(sock, sender_ip, receiver_ip, temp->tunnel_id);
+                send_resv_message(sock, temp->tunnel_id);
             } else {
                 printf("not received path msg\n");
             }

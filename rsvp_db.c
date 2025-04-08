@@ -32,7 +32,7 @@ struct session* insert_session(struct session* sess, uint8_t t_id, char sender[]
             if((strcmp(sess->sender, sender) == 0) &&
                     (strcmp(sess->receiver, receiver) == 0)) {
                 sess->last_path_time = now;
-                return NULL;
+                return;
             }
             local = sess;
             sess=sess->next;
@@ -179,7 +179,7 @@ db_node* min_node(db_node* node) {
 
 /* Delete a node from path_msg AVL tree */
 db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *), int msg) {
-    if (node == NULL) return;
+    if (node == NULL) return NULL;
 
     if (cmp(tunnel_id, node->data) < 0)
         node->left = delete_node(node->left, tunnel_id, cmp, msg);
@@ -192,8 +192,14 @@ db_node* delete_node(db_node* node, int tunnel_id, int (*cmp)(int , const void *
             if (temp == NULL) {
                 temp = node;
                 node = NULL;
-            } else
+            } else {
                 *node = *temp; // Copy the contents
+	    }
+	    if(msg) {
+	        free((path_msg*) temp->data);
+	    } else {
+	        free((resv_msg*) temp->data);
+	    }
             free(temp);
         } else {
             db_node* temp = min_node(node->right);
@@ -276,8 +282,8 @@ void display_tree(db_node *node, int msg) {
                 source_ip,
                 destination_ip,
                 next_hop_ip,
-                r->in_label,
-                r->out_label);
+                htonl(r->in_label),
+                htonl(r->out_label));
     }
     display_tree(node->right, msg);
 }
@@ -305,12 +311,17 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[]) {
     p->name[sizeof(p->name) - 1] = '\0';
 
     //get and assign nexthop
-    get_nexthop(inet_ntoa(p->dest_ip), nhip);
-    if(strcmp(nhip, " ") == 0) {
-        inet_pton(AF_INET, "-", &p->nexthop_ip);
+    if(get_nexthop(inet_ntoa(p->dest_ip), nhip)) {
+       if(strcmp(nhip, " ") == 0) {
+            inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+        }
+        else {
+            inet_pton(AF_INET, nhip, &p->nexthop_ip);
+        }
+    } else {
+	printf("No route to destination\n");
+	return NULL;
     }
-    else    
-        inet_pton(AF_INET, nhip, &p->nexthop_ip);
 
     return insert_node(path_tree, p, compare_path_insert);
 }
@@ -334,13 +345,17 @@ db_node* resv_tree_insert(db_node* resv_tree, char buffer[]) {
         p->in_label = htonl(100);  //get the label from the label management;	
 
     //get and assign nexthop
-    get_nexthop(inet_ntoa(p->src_ip), nhip);
-    if(strcmp(nhip, " ") == 0) {
-        inet_pton(AF_INET, "-", &p->nexthop_ip);
+    if(get_nexthop(inet_ntoa(p->src_ip), nhip)) {
+	if(strcmp(nhip, " ") == 0) {
+            inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+        }
+    	else { 
+            inet_pton(AF_INET, nhip, &p->nexthop_ip);	
+        }
+    } else {
+        printf("No route to Source\n");
+        return NULL;
     }
-    else 
-        inet_pton(AF_INET, nhip, &p->nexthop_ip);	
 
     return insert_node(resv_tree, p, compare_resv_insert);
 }
-
