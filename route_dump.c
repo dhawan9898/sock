@@ -241,12 +241,13 @@ int do_route_dump_requst(int sock)
         struct rtmsg rtm;
     } nl_request;
 
+    memset(&nl_request, 0, sizeof(nl_request));
     nl_request.nlh.nlmsg_type = RTM_GETROUTE;
     nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
     nl_request.nlh.nlmsg_len = sizeof(nl_request);
     nl_request.nlh.nlmsg_seq = time(NULL);
     nl_request.rtm.rtm_family = AF_INET;
-    nl_request.rtm.rtm_table = RT_TABLE_LOCAL;
+    //nl_request.rtm.rtm_table = RT_TABLE_LOCAL;
 
     return send(sock, &nl_request, sizeof(nl_request), 0);
 }

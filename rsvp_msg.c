@@ -119,7 +119,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
     inet_pton(AF_INET, dst_ip, &receiver_ip);
     if(dst_reached(dst_ip)) {*/
     path_msg *p = (path_msg*)path_node->data;
-    if(strcmp(inet_ntoa(p->nexthop_ip), "-")) {
+    if(strcmp(inet_ntoa(p->nexthop_ip), "-") == 0) {
         printf("****reached the destiantion, end oF rsvp tunnel***\n");
 
         db_node *resv_node = search_node(resv_tree, session_obj->tunnel_id, compare_resv_del);
@@ -267,7 +267,7 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
     inet_pton(AF_INET, dst_ip, &receiver_ip);
     if(dst_reached(src_ip)) {*/
     resv_msg *p = (resv_msg*)resv_node->data;
-    if(strcmp(inet_ntoa(p->nexthop_ip),"-")) {
+    if(strcmp(inet_ntoa(p->nexthop_ip),"-") == 0) {
         printf("****reached the source, end oF rsvp tunnel***\n");
     } else {
         printf("send resv msg to nexthop \n");

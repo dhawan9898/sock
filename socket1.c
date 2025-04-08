@@ -76,16 +76,11 @@ int main() {
         if(srcip[len-1] == '\n') 
             srcip[len-1] = '\0';
 
-        strlen(dstip);
+        len = strlen(dstip);
         if(dstip[len-1] == '\n')
             dstip[len-1] = '\0';
 
-
         path_msg *path = malloc(sizeof(path_msg));
-        //path_msg path;
-        path->tunnel_id = tunnel_id;
-        inet_pton(AF_INET, srcip, &path->src_ip);
-        inet_pton(AF_INET, dstip, &path->dest_ip);
 
         //get and assign nexthop
         get_nexthop(dstip, nhip);
@@ -96,6 +91,12 @@ int main() {
         }
         else 
             inet_pton(AF_INET, nhip, &path->nexthop_ip);	
+
+        //path_msg path;
+        path->tunnel_id = tunnel_id;
+        inet_pton(AF_INET, srcip, &path->src_ip);
+        inet_pton(AF_INET, dstip, &path->dest_ip);
+
 
         path->interval = 30;
         path->setup_priority = 7;
