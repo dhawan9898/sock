@@ -13,10 +13,15 @@
 
 int sock = 0;
 
-struct session* path_head;
-struct session* resv_head;
-db_node *path_tree;
-db_node *resv_tree;
+extern struct session* path_head;
+extern struct session* resv_head;
+extern db_node *path_tree;
+extern db_node *resv_tree;
+
+extern pthread_mutex_t path_tree_mutex;
+extern pthread_mutex_t resv_tree_mutex;
+extern pthread_mutex_t path_list_mutex;
+extern pthread_mutex_t resv_list_mutex;
 
 uint32_t ip_to_int(const char* ip_str) {
     struct in_addr ip_addr;
@@ -50,6 +55,16 @@ int main() {
     struct sockaddr_in sender_addr;
     socklen_t addr_len = sizeof(sender_addr);
 
+    // Initialize the mutexes
+    if (pthread_mutex_init(&path_tree_mutex, NULL) != 0 ||
+        pthread_mutex_init(&resv_tree_mutex, NULL) != 0 ||
+        pthread_mutex_init(&path_list_mutex, NULL) != 0 ||
+        pthread_mutex_init(&resv_list_mutex, NULL) != 0) {
+        perror("Failed to initialize mutex");
+        close(sock);
+        return 1;
+    }
+
     while(1) {
         printf("Waiting to receive mesgae\n");
         memset(buffer, 0, sizeof(buffer));
@@ -74,12 +89,14 @@ int main() {
                 get_ip(buffer, sender_ip, receiver_ip,&tunnel_id);
                 reached = dst_reached(receiver_ip);
 
+                pthread_mutex_lock(&path_list_mutex);
                 printf("insert_path_session\n");
                 if(path_head == NULL) {
                     path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
                 } else {
                     insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
                 }
+                pthread_mutex_unlock(&path_list_mutex);
 
                 receive_path_message(sock,buffer,sender_addr);	
 
@@ -95,11 +112,13 @@ int main() {
                 reached = dst_reached(sender_ip);
 
                 printf("insert_resv_session\n");
+                pthread_mutex_lock(&resv_list_mutex);
                 if(resv_head == NULL) {
                     resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
                 } else {
                     insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
                 }
+                pthread_mutex_unlock(&resv_list_mutex);
 
                 receive_resv_message(sock,buffer,sender_addr);
 
@@ -108,6 +127,10 @@ int main() {
         }
     }
     close(sock);
+    pthread_mutex_destroy(&path_tree_mutex);
+    pthread_mutex_destroy(&resv_tree_mutex);
+    pthread_mutex_destroy(&path_list_mutex);
+    pthread_mutex_destroy(&resv_list_mutex);
     return 0;
 }
 

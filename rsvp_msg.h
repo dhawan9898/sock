@@ -145,4 +145,4 @@ void get_resv_class_obj(int[]);
 void get_path_class_obj(int[]);
 int dst_reached(char []);
 void get_ip(char[], char[], char [], uint16_t *);
-extern int get_nexthop(const char *, const char *);
+extern int get_nexthop(const char *, const char *, uint8_t*, const char *, uint32_t*);

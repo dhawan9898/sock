@@ -15,30 +15,29 @@
 
 struct src_dst_ip *ip = NULL;
 
-struct session* path_head;
-struct session* resv_head;
-db_node *path_tree;
-db_node *resv_tree;
+extern struct session* path_head;
+extern struct session* resv_head;
+extern db_node *path_tree;
+extern db_node *resv_tree;
+
+extern pthread_mutex_t path_tree_mutex;
+extern pthread_mutex_t resv_tree_mutex;
+extern pthread_mutex_t path_list_mutex;
+extern pthread_mutex_t resv_list_mutex;
 
 int sock = 0;
 
 int main() {
 
-    char srcip[16];
-    char dstip[16];
-    char nhip[16];
+    char srcip[16], dstip[16], nhip[16], buffer[512], sender_ip[16], receiver_ip[16];;
     uint16_t tunnel_id;
     int explicit = 0;
-    char buffer[512];
-    struct sockaddr_in sender_addr;
-    socklen_t addr_len = sizeof(sender_addr);
-
-    //struct sockaddr_in dest_addr;
-    struct sockaddr_in addr;
-
-    char sender_ip[16];
-    char receiver_ip[16];
+    struct sockaddr_in sender_addr, addr;
     struct in_addr send_ip, rece_ip;
+    socklen_t addr_len = sizeof(sender_addr);
+    uint32_t ifh;
+    uint8_t prefix_len = 0;
+    char dev[16];
 
     sock = socket(AF_INET, SOCK_RAW, RSVP_PROTOCOL);
     if (sock < 0) {
@@ -53,6 +52,16 @@ int main() {
         perror("binding failed");
         close(sock);
         exit(EXIT_FAILURE);
+    }
+
+    // Initialize the mutexes
+    if (pthread_mutex_init(&path_tree_mutex, NULL) != 0 ||
+        pthread_mutex_init(&resv_tree_mutex, NULL) != 0 ||
+        pthread_mutex_init(&path_list_mutex, NULL) != 0 ||
+        pthread_mutex_init(&resv_list_mutex, NULL) != 0) {
+        perror("Failed to initialize mutex");
+        close(sock);
+        return 1;
     }
 
     // only in PE1 or PE2 where we configure the tunnel for RSVP.
@@ -83,18 +92,19 @@ int main() {
         path_msg *path = malloc(sizeof(path_msg));
 
         //get and assign nexthop
-        if(get_nexthop(dstip, nhip)) {
+        if(get_nexthop(dstip, nhip, &prefix_len, dev, &ifh)) {
+            strcpy(path->dev, dev);
+            path->IFH = ifh;
+            path->prefix_len = prefix_len;
             if(strcmp(nhip, " ") == 0) {
                 inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
-                printf("dont have route to the destination ip %s\n",inet_ntoa(path->dest_ip));
-                continue;
             } else {
                 inet_pton(AF_INET, nhip, &path->nexthop_ip);
-	    }
- 	} else {
-		printf("no route to destination\n");
-		continue;
-	}	
+            }
+        } else {
+            printf("no route to destination\n");
+            continue;
+        }	
 
         //path_msg path;
         path->tunnel_id = tunnel_id;
@@ -107,21 +117,25 @@ int main() {
         path->hold_priority = 7;
         path->flags = 0;
         path->lsp_id = 1;
-        path->IFH = 123;
+        path->IFH = ifh;
         strncpy(path->name, "Path1", sizeof(path->name) - 1);
         path->name[sizeof(path->name) - 1] = '\0';
 
+        pthread_mutex_lock(&path_tree_mutex);
         path_tree = insert_node(path_tree, (void*)path, compare_path_insert); 
         display_tree(path_tree, 1);
+        pthread_mutex_unlock(&path_tree_mutex);
 
         inet_pton(AF_INET, srcip, &send_ip);
         inet_pton(AF_INET, dstip, &rece_ip);
 
+        pthread_mutex_lock(&resv_list_mutex);
         if(resv_head == NULL) {
             resv_head = insert_session(resv_head, tunnel_id, srcip, dstip, 1);
         } else {
             insert_session(resv_head, tunnel_id, srcip, dstip, 1);
         }
+        pthread_mutex_unlock(&resv_list_mutex);
 
         // Send RSVP-TE PATH Message
         send_path_message(sock, path->tunnel_id);
@@ -150,14 +164,16 @@ int main() {
                 // get ip from the received path packet
                 printf(" in path msg type\n");
                 get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-                reached = dst_reached(sender_ip);
+                reached = dst_reached(receiver_ip);
 
                 printf("insert_path_session\n");
+                pthread_mutex_lock(&path_list_mutex);
                 if(path_head == NULL) {
                     path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip,reached);
                 } else {
                     insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
                 }
+                pthread_mutex_unlock(&path_list_mutex);
 
                 receive_path_message(sock,buffer,sender_addr);
 
@@ -174,11 +190,13 @@ int main() {
                 reached = dst_reached(sender_ip);
 
                 printf("insert_resv_session\n");
+                pthread_mutex_lock(&resv_list_mutex);
                 if(resv_head == NULL) {
                     resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
                 } else {
                     insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
                 }
+                pthread_mutex_unlock(&resv_list_mutex);
 
                 receive_resv_message(sock,buffer,sender_addr);
                 break;
@@ -186,6 +204,10 @@ int main() {
     }
 
     close(sock);
+    pthread_mutex_destroy(&path_tree_mutex);
+    pthread_mutex_destroy(&resv_tree_mutex);
+    pthread_mutex_destroy(&path_list_mutex);
+    pthread_mutex_destroy(&resv_list_mutex);
     return 0;
 }
 
