@@ -21,7 +21,7 @@ extern pthread_mutex_t resv_list_mutex;
 // Function to send an RSVP-TE RESV message with label assignment
 void send_resv_message(int sock, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
-    char resv_packet[256];
+    char resv_packet[RESV_PACKET_SIZE];
     char nhip[16];
 
     struct rsvp_header *resv = (struct rsvp_header*)resv_packet;
@@ -161,7 +161,7 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 //Function to send PATH message for label request
 void send_path_message(int sock, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
-    char path_packet[256];
+    char path_packet[PATH_PACKET_SIZE];
     char nhip[16];
 
     struct rsvp_header *path = (struct rsvp_header*)path_packet;
