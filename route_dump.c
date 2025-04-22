@@ -10,8 +10,9 @@
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>
 
+#include "log.h"
 
-static char dest_ip[16], nh[16], DEv[16];
+static char dest_ip[16], nh[16], Dev[16];
 static uint32_t ifh;
 uint8_t prefix_len = 0;
 char src_ip[16];
@@ -138,13 +139,13 @@ int print_route(struct nlmsghdr* nl_header_answer)
         inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_DST]), buf, sizeof(buf));
         strcpy(route, buf);
         prefix_len = r->rtm_dst_len;	
-        //printf("route = %s %d\n", route,prefix_len);
-        //printf("%s/%u ", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_DST]), buf, sizeof(buf)), r->rtm_dst_len);
+        //log_message("route = %s %d\n", route,prefix_len);
+        //log_message("%s/%u ", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_DST]), buf, sizeof(buf)), r->rtm_dst_len);
 
     } else if (r->rtm_dst_len) {
-        printf("0/%u ", r->rtm_dst_len);
+        log_message("0/%u ", r->rtm_dst_len);
     } else {
-        //printf("default ");
+        //log_message("default ");
         strcpy(route, "0.0.0.0");
         //route = "0.0.0.0";
     }
@@ -152,8 +153,8 @@ int print_route(struct nlmsghdr* nl_header_answer)
     if (tb[RTA_GATEWAY]) {
         inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_GATEWAY]), buf, sizeof(buf));
         strcpy(nh, buf);
-        //printf("next hop for destination ip %s is -> %s\n", dest_ip, nh);
-        //printf("via %s", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_GATEWAY]), buf, sizeof(buf)));
+        //log_message("next hop for destination ip %s is -> %s\n", dest_ip, nh);
+        //log_message("via %s", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_GATEWAY]), buf, sizeof(buf)));
     }
 
     if (tb[RTA_OIF]) {
@@ -162,35 +163,35 @@ int print_route(struct nlmsghdr* nl_header_answer)
 
 	ifh = ifidx;
         dev = if_indextoname(ifidx, if_nam_buf);
-        strcpy(DEv, dev);
+        strcpy(Dev, dev);
 
-        //printf("dev -- %s ifidx = %d buf = %s\n", dev,ifidx,if_nam_buf);
-        //printf(" dev %s", if_indextoname(ifidx, if_nam_buf));
+        //log_message("dev -- %s ifidx = %d buf = %s\n", dev,ifidx,if_nam_buf);
+        //log_message(" dev %s", if_indextoname(ifidx, if_nam_buf));
     }
 
     if (tb[RTA_SRC]) {
         //inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_SRC]), buf, sizeof(buf));
         //strcpy(src, buf);
 
-        //printf("\n src -- %s\n", src);
-        //printf("src %s", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_SRC]), buf, sizeof(buf)));
+        //log_message("\n src -- %s\n", src);
+        //log_message("src %s", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_SRC]), buf, sizeof(buf)));
     }
 
     if (tb[RTA_PREFSRC]) {
         inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_PREFSRC]), buf, sizeof(buf));
         strcpy(src_ip, buf);
-        //printf("src_ip = %s\n",src_ip);	
-        //printf("src %s\n", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_PREFSRC]), buf, sizeof(buf)));
+        //log_message("src_ip = %s\n",src_ip);	
+        //log_message("src %s\n", inet_ntop(r->rtm_family, RTA_DATA(tb[RTA_PREFSRC]), buf, sizeof(buf)));
     }
 
     if(is_ip_in_subnet(dest_ip, route, prefix_len) == 1) {
-	printf("next hop for destination ip %s is -> %s prefix_len = %d dev = %s ifh = %d\n", dest_ip,nh,prefix_len, DEv, ifh);
+	log_message("next hop for destination ip %s is -> %s prefix_len = %d dev = %s ifh = %d\n", dest_ip,nh,prefix_len, Dev, ifh);
         return 1;
     } else {
         return 0;
     }
 
-    //printf("\n");
+    //log_message("\n");
 }
 
 int open_netlink()
@@ -255,7 +256,7 @@ int get_route_dump_response(int sock)
     struct nlmsghdr *h = (struct nlmsghdr *)buf;
     int msglen = status;
 
-    //printf("Main routing table IPv4\n");
+    //log_message("Main routing table IPv4\n");
 
     while (NLMSG_OK(h, msglen)) {
         if (h->nlmsg_flags & NLM_F_DUMP_INTR) {
@@ -303,7 +304,7 @@ int get_nexthop(const char *dst_ip, char *nh_ip, uint8_t *pref_len, char* Dev, i
     temp = get_route_dump_response(nl_sock);
 
     strcpy(nh_ip, nh);
-    strcpy(Dev, DEv);
+    strcpy(Dev, Dev);
     *Ifh = ifh;
     *pref_len = prefix_len;
 

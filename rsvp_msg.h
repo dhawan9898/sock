@@ -43,10 +43,9 @@
 #define START_RECV_FILTER_SPEC_OBJ (IP + START_SENT_FILTER_SPEC_OBJ)
 
 #define START_SENT_LABEL (START_SENT_FILTER_SPEC_OBJ + sizeof(struct Filter_spec_object))
-#define START_RECV_LABEL (IP + START_SENT_LABEL) 
+#define START_RECV_LABEL (IP + START_SENT_LABEL)
 
 #define RESV_PACKET_SIZE (START_SENT_LABEL + sizeof(struct label_object))
-
 
 // RSVP Common Header (Simplified)
 struct rsvp_header {

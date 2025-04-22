@@ -6,13 +6,21 @@
 #include<netinet/in.h>
 #include<time.h>
 #include<pthread.h>
+#include<unistd.h>
 
+#include "log.h"
+
+#define EXPLICIT_NULL 0 
+#define IMPLICIT_NULL 3 
+#define BASE_LABEL 16
+ 
 struct session {
     char sender[16];
     char receiver[16];
     uint16_t tunnel_id;
+    uint8_t del;
+    uint8_t dest; 
     time_t last_path_time;
-    uint8_t dest;
     struct session *next;
 };
 
@@ -21,6 +29,7 @@ typedef struct path_msg {
     struct in_addr src_ip;
     struct in_addr dest_ip;
     struct in_addr nexthop_ip;
+    struct in_addr p_nexthop_ip;
     uint16_t tunnel_id;
     uint32_t IFH;
     uint32_t interval;
@@ -67,18 +76,24 @@ static inline int get_balance(db_node *node) {
     return node ? get_height(node->left) - get_height(node->right) : 0;
 }
 
-typedef int (*cmp)(uint16_t , const void *);
-typedef int (*cmp1) (const void*, const void *);
-db_node* insert_node(db_node *, void *, cmp1 func);
-db_node* delete_node(db_node *, uint16_t, cmp func, uint8_t);
-db_node* search_node(db_node *, uint16_t, cmp func);
-void free_tree(db_node *);
-void display_tree(db_node *, uint8_t);
+typedef int (*cmp_tunnel_id)(uint16_t , const void *);
+typedef int (*cmp_message) (const void*, const void *);
+db_node* insert_node(db_node *, void *, cmp_message func);
+db_node* delete_node(db_node *, uint16_t, cmp_tunnel_id func, uint8_t);
+db_node* search_node(db_node *, uint16_t, cmp_tunnel_id func);
 
-struct session* insert_session(struct session*, uint8_t, char[], char[], uint8_t);
-struct session* delete_session(struct session*, struct session*);
-db_node* path_tree_insert(db_node*, char[]);
-db_node* resv_tree_insert(db_node*, char[], uint8_t);
+void update_tables(uint16_t);
+void free_tree(db_node *);
+void display_tree_debug(db_node *, uint8_t);
+void display_tree(db_node * , uint8_t , char * , size_t);
+
+void print_session(struct session*);
+struct session* search_session(struct session*, uint16_t);
+struct session* insert_session(struct session*, uint16_t, char[], char[], uint8_t);
+struct session* delete_session(struct session*, struct session*, struct session*);
+void insert(char[], uint8_t);
+db_node* path_tree_insert(db_node*, char[], struct in_addr);
+db_node* resv_tree_insert(db_node*, char[], struct in_addr, uint8_t);
 int compare_path_del(uint16_t , const void *);
 int compare_resv_del(uint16_t , const void *);
 int compare_path_insert(const void * , const void *);
