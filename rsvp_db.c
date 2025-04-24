@@ -24,12 +24,13 @@ pthread_mutex_t resv_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct session* search_session(struct session* sess, uint16_t tunnel_id) {
 	now = time(NULL);
-	while(sess != NULL) {
-            if( sess->tunnel_id == tunnel_id) {
-                sess->last_path_time = now;
-                return sess;
+    struct session *temp = sess;
+	while(temp != NULL) {
+            if( temp->tunnel_id == tunnel_id) {
+                temp->last_path_time = now;
+                return temp;
             }
-            sess=sess->next;
+            temp=temp->next;
         }
 	return NULL;	
 }
@@ -95,10 +96,11 @@ struct session* delete_session(struct session* head, struct session* sess, struc
         temp = sess->next;
         if(temp == NULL) {
             prev->next = NULL;
-            return;
+            return head;
         }
         *sess = *sess->next;
         free(temp);
+        return head;
     }
 }
 

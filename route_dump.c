@@ -12,7 +12,7 @@
 
 #include "log.h"
 
-static char dest_ip[16], nh[16], Dev[16];
+static char dest_ip[16], nh[16], DEv[16];
 static uint32_t ifh;
 uint8_t prefix_len = 0;
 char src_ip[16];
@@ -163,7 +163,7 @@ int print_route(struct nlmsghdr* nl_header_answer)
 
 	ifh = ifidx;
         dev = if_indextoname(ifidx, if_nam_buf);
-        strcpy(Dev, dev);
+        strcpy(DEv, dev);
 
         //log_message("dev -- %s ifidx = %d buf = %s\n", dev,ifidx,if_nam_buf);
         //log_message(" dev %s", if_indextoname(ifidx, if_nam_buf));
@@ -185,7 +185,7 @@ int print_route(struct nlmsghdr* nl_header_answer)
     }
 
     if(is_ip_in_subnet(dest_ip, route, prefix_len) == 1) {
-	log_message("next hop for destination ip %s is -> %s prefix_len = %d dev = %s ifh = %d\n", dest_ip,nh,prefix_len, Dev, ifh);
+	log_message("next hop for destination ip %s is -> %s prefix_len = %d dev = %s ifh = %d\n", dest_ip,nh,prefix_len, DEv, ifh);
         return 1;
     } else {
         return 0;
@@ -304,7 +304,7 @@ int get_nexthop(const char *dst_ip, char *nh_ip, uint8_t *pref_len, char* Dev, i
     temp = get_route_dump_response(nl_sock);
 
     strcpy(nh_ip, nh);
-    strcpy(Dev, Dev);
+    strcpy(Dev, DEv);
     *Ifh = ifh;
     *pref_len = prefix_len;
 

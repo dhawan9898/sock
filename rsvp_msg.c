@@ -320,14 +320,20 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
 	
 	log_message("send resv tunnel id  %d next hop is %s \n",ntohs(session_obj->tunnel_id), inet_ntoa(p->nexthop_ip));
 
-        inet_ntop(AF_INET, &pa->dest_ip, d_ip, 16);
+
+    struct in_addr net, mask;
+        char network[16];
+        mask.s_addr = htonl(~((1 << (32 - pa->prefix_len)) - 1));
+        net.s_addr = pa->dest_ip.s_addr & mask.s_addr;
+
+        inet_ntop(AF_INET, &net, network, 16);
         inet_ntop(AF_INET, &pa->nexthop_ip, n_ip, 16);
 
         if(strcmp(inet_ntoa(p->nexthop_ip),"0.0.0.0") == 0) {
             log_message("****reached the source, end oF rsvp tunnel***\n");
 
             snprintf(command, sizeof(command), "ip route add %s/%d encap mpls %d via %s dev %s",
-                    d_ip, pa->prefix_len, (p->out_label), n_ip, pa->dev);
+                    network, pa->prefix_len, (p->out_label), n_ip, pa->dev);
 
             log_message(" ========== 1 %s \n", command);
             system(command);

@@ -266,6 +266,7 @@ path_msg* create_path(const char *args, char *response, size_t response_size) {
     char nhip[16];
     //if (path->path_type == 0) { // Dynamic
     if(get_nexthop(inet_ntoa(path->dest_ip), nhip, &path->prefix_len, dev, &path->IFH)) { 
+	strcpy(path->dev, dev);
         if (strcmp(nhip, " ") == 0) {
 		inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
        	} else {
