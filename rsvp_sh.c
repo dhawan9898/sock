@@ -1,3 +1,23 @@
+/*
+ * Copyright (c) 2025, Spanidea. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the “Software”), to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ **/
+
 #include <sys/un.h>
 #include "rsvp_db.h"
 #include "rsvp_msg.h"
@@ -71,7 +91,7 @@ int rsvp_add_config(const char* args, char* response, size_t response_size) {
     }
     log_message("Processing tunnel %d in rsvp_add_config", path->tunnel_id);
     log_message("Calling insert_node for tunnel %d", path->tunnel_id);
-    path_tree = insert_node(path_tree, path, compare_path_insert);
+    path_tree = insert_node(path_tree, path, compare_path_insert, 1);
     if(path_tree == NULL)
 	return;
     log_message("insert_node completed for tunnel %d path tree %d", path->tunnel_id,path_tree);
