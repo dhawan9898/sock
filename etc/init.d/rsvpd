@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# rsvpd.init
+
+START=50
+STOP=50
+
+start() {
+    /usr/sbin/rsvpd
+    echo "RSVP daemon started"
+}
+
+stop() {
+     if [ -f /var/run/rsvpd.pid ]; then
+        kill $(cat /var/run/rsvpd.pid) 2>/dev/null
+        rm -f /var/run/rsvpd.pid
+        echo "RSVP daemon stopped"
+    else
+        echo "RSVP daemon not running"
+    fi
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
