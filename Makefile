@@ -20,7 +20,7 @@ all: $(EXEC)
 
 # Rule to build socket1
 $(EXEC): $(SRC) $(HEADERS)
-	$(CC) $(CFLAGS) -o $(EXEC) $(SRC)
+	$(CC) $(CFLAGS) -o $(EXEC) $(SRC) -lrt
 
 # Optional: Rule to create object files (useful for larger projects)
 %.o: %.c $(HEADERS)

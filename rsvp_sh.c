@@ -40,6 +40,16 @@ extern pthread_mutex_t resv_list_mutex;
 
 extern int sock;
 
+static volatile sig_atomic_t sigint_received = 0;
+static int in_config_mode = 0;
+
+void sigint_handler(int sig) {
+     sigint_received = 1;
+     if (in_config_mode) {
+         in_config_mode = 0;
+     }
+ }
+
 // Show API functions
 void get_path_tree_info(char* buffer, size_t buffer_size) {
     buffer[0] = '\0'; // Clear buffer
@@ -160,8 +170,24 @@ int rsvp_delete_config(const char* args, char* response, size_t response_size) {
         return -1;
     }
 
+    db_node *path_node;
+    pthread_mutex_lock(&path_tree_mutex);
+    path_node = search_node(path_tree, tunnel_id, compare_path_del);
+    pthread_mutex_unlock(&path_tree_mutex);
+    if(path_node != NULL) {
+        path_msg *p = (path_msg*)path_node->data;
+        if(strcmp(inet_ntoa(p->p_srcip), "0.0.0.0") != 0) {
+                log_message("Delete from the Node where you have initiated the RSVP config\n");
+                log_message("Not Deleting Returning from here\n");
+                snprintf(response, response_size, "Error: Delete tunnel from head node\n");
+                return 0;
+        }
+    }
+
     log_message("before delete node tunnel id %d path_tree = %d",tunnel_id,path_tree);
     if(search_node(path_tree, tunnel_id, compare_path_del) != NULL) {
+        log_message("User initiates pathtear for tunnel id:%d\n", tunnel_id);
+        send_pathtear_message(sock, tunnel_id);
     	db_node *temp = delete_node(path_tree, tunnel_id, compare_path_del, 1);
     	if(temp == NULL) {
 		path_tree = temp;
@@ -171,7 +197,9 @@ int rsvp_delete_config(const char* args, char* response, size_t response_size) {
 		log_message(" tunne id = %d deleted", tunnel_id);
 	}
     } else {
-	log_message(" tunnel id = %d not found in path tree", tunnel_id);
+        log_message("Tunnel id = %d not found in path tree", tunnel_id);
+	snprintf(response, response_size, " Tunnel id = %d not found in path tree\n", tunnel_id);
+        return -1;
     }
 
     print_session(resv_head);
@@ -186,6 +214,9 @@ int rsvp_delete_config(const char* args, char* response, size_t response_size) {
 	
 
 path_msg* create_path(const char *args, char *response, size_t response_size) {
+    char Srcip[16];
+    uint32_t ifh;
+    uint8_t prefix_len;
     path_msg *path = malloc(sizeof(path_msg));
     char dev[16];
     if (!path) {
@@ -198,7 +229,7 @@ path_msg* create_path(const char *args, char *response, size_t response_size) {
     path->src_ip.s_addr = 0;
     path->dest_ip.s_addr = 0;
     path->nexthop_ip.s_addr = 0;
-    inet_pton(AF_INET, "0.0.0.0", &path->p_nexthop_ip);
+    //inet_pton(AF_INET, "0.0.0.0", &path->p_nexthop_ip);
     path->interval = 30;
     path->setup_priority = 7;
     path->hold_priority = 7;
@@ -285,12 +316,19 @@ path_msg* create_path(const char *args, char *response, size_t response_size) {
     // Set nexthop based on path type
     char nhip[16];
     //if (path->path_type == 0) { // Dynamic
-    if(get_nexthop(inet_ntoa(path->dest_ip), nhip, &path->prefix_len, dev, &path->IFH)) { 
+    if(get_nexthop(inet_ntoa(path->dest_ip), nhip, &prefix_len, dev, &ifh)) { 
 	strcpy(path->dev, dev);
+        path->IFH = ifh;
+        path->prefix_len = prefix_len;
         if (strcmp(nhip, " ") == 0) {
 		inet_pton(AF_INET, "0.0.0.0", &path->nexthop_ip);
        	} else {
 		inet_pton(AF_INET, nhip, &path->nexthop_ip);
+		inet_pton(AF_INET, "0.0.0.0", &path->p_srcip);
+  		if(get_srcip(nhip, Srcip, &ifh)) {
+                	inet_pton(AF_INET, Srcip, &path->e_srcip);
+			path->IFH = ifh;
+		}
 	}
     } else {
        	log_message("No route to destination\n");
@@ -313,10 +351,25 @@ int rsvpsh_main() {
     struct sockaddr_un addr;
     char input[256], response[MAX_BUFFER];
     int in_config_mode = 0;
+    struct sigaction sa;
+        sa.sa_handler = sigint_handler;
+        sa.sa_flags = 0;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGINT, &sa, NULL) == -1) {
+           perror("sigaction failed");
+           return 1;
+        }
 
     printf("\033[1;32mRSVP Shell (OpenWrt)\033[0m\n");
 
     while (1) {
+
+        if (sigint_received) {
+             printf("\n");
+             sigint_received = 0;
+             continue;
+        }
+
         printf("%s> ", in_config_mode ? "(config)# " : "rsvp");
         fflush(stdout);
         if (fgets(input, sizeof(input), stdin) == NULL) continue;

@@ -43,7 +43,6 @@ uint32_t  allocate_label (void) {
     return -1; // No labels available
 }
 
-
 // Free a previously allocated label
 uint8_t free_label (uint32_t label) {
     if (label < LABEL_MIN || label > LABEL_MAX)
@@ -56,5 +55,4 @@ uint8_t free_label (uint32_t label) {
     label_bitmap[word_index] &= ~((uint32_t)1 << bit_index);
     return 1;
 }
-
 

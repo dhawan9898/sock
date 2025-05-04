@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <time.h>
 #include "log.h"
 
 FILE* log_file = NULL;
@@ -28,9 +29,15 @@ pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 void log_message(const char* format, ...) {
     pthread_mutex_lock(&log_mutex);
     if (log_file) {
+        time_t now = time(NULL);
+        struct tm* tm_info = localtime(&now);
+
+        char time_str[20];
+        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+
         va_list args;
         va_start(args, format);
-        fprintf(log_file, "[%ld] ", time(NULL));
+        fprintf(log_file, "[%s] ", time_str);
         vfprintf(log_file, format, args);  // Use vflog_message for variadic args
         fprintf(log_file, "\n");
         fflush(log_file);  // Ensure immediate write

@@ -38,11 +38,41 @@ extern pthread_mutex_t resv_tree_mutex;
 extern pthread_mutex_t path_list_mutex;
 extern pthread_mutex_t resv_list_mutex;
 
+// Function to calculate checksum
+uint16_t calculate_checksum(void *data, size_t len) {
+    const uint16_t *buf = data;
+    uint32_t sum = 0;
+    size_t length = len;
+
+    // Sum all 16-bit words
+    while (length > 1) {
+        sum += *buf++;
+        length -= 2;
+    }
+
+    // Add the remaining byte, if length is odd
+    if (length == 1) {
+        sum += *(const uint8_t *)buf; // Add the last byte
+    }
+
+    // Fold the 32-bit sum into 16 bits by adding carries
+    while (sum >> 16) {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+
+    // Take the one's complement
+    sum = ~sum;
+
+    // Return the checksum in network byte order
+    // The calculation inherently produces the correct byte order
+    // for direct insertion into the header field.
+    return (uint16_t)sum;
+}
+
 // Function to send an RSVP-TE RESV message with label assignment
 void send_resv_message(int sock, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
     char resv_packet[RESV_PACKET_SIZE];
-    char nhip[16];
 
     struct rsvp_header *resv = (struct rsvp_header*)resv_packet;
     //    struct class_obj *class_obj = (struct class_obj*)(resv_packet + sizeof(struct rsvp_header));
@@ -59,6 +89,7 @@ void send_resv_message(int sock, uint16_t tunnel_id) {
 	log_message("tunnel id %d not found\n", tunnel_id);
 	return;
     }
+    display_tree_debug(resv_tree, 0);
     resv_msg *p = (resv_msg*)resv_node->data;
 
     // Populate RSVP RESV header
@@ -81,7 +112,7 @@ void send_resv_message(int sock, uint16_t tunnel_id) {
     hop_obj->class_obj.class_num = 3;
     hop_obj->class_obj.c_type = 1;
     hop_obj->class_obj.length = htons(sizeof(struct hop_object));
-    hop_obj->next_hop = p->nexthop_ip;
+    hop_obj->next_hop = p->e_srcip;
     hop_obj->IFH = htonl(p->IFH);
 
     time_obj->class_obj.class_num = 5;
@@ -102,9 +133,11 @@ void send_resv_message(int sock, uint16_t tunnel_id) {
     label_obj->class_obj.length = htons(sizeof(struct label_object));
     label_obj->label = htonl(p->in_label);
 
+    //adding checksum
+    resv->checksum = calculate_checksum(resv_packet, RESV_PACKET_SIZE);
     // Set destination (ingress router)
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr = hop_obj->next_hop;
+    dest_addr.sin_addr = p->nexthop_ip;
     dest_addr.sin_port = 0;
 
     // Send RESV message
@@ -112,7 +145,7 @@ void send_resv_message(int sock, uint16_t tunnel_id) {
                 (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
         perror("Send failed");
     } else {
-        log_message("Sent RESV message to %s with Label %d\n", inet_ntoa(hop_obj->next_hop), p->in_label);
+        log_message("Sent RESV message to %s with Label %d\n", inet_ntoa(p->nexthop_ip), p->in_label);
     }
 }
 
@@ -128,25 +161,18 @@ void get_path_class_obj(int class_obj_arr[]) {
 
 // Function to receive RSVP-TE PATH messages
 void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_addr) {
-    //char buffer[1024];
-    struct class_obj *class_obj;
-    int class_obj_arr[10]; 
-    int i = 0;
-    char src_ip[16], dst_ip[16];
-    struct in_addr sender_ip, receiver_ip;
-    uint16_t tunnel_id;
+
     db_node *temp = NULL;
 
     log_message("Received PATH message from %s\n", inet_ntoa(sender_addr.sin_addr));
 
-    struct rsvp_header *rsvp = (struct rsvp_header*)(buffer+20);
     struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
 
     pthread_mutex_lock(&path_tree_mutex);
     db_node *path_node = search_node(path_tree, ntohs(session_obj->tunnel_id), compare_path_del);
     pthread_mutex_unlock(&path_tree_mutex);
     if(path_node == NULL){
-        temp = path_tree_insert(path_tree, buffer, sender_addr.sin_addr);
+        temp = path_tree_insert(path_tree, buffer);
         if(temp != NULL) {
             path_tree = temp;
             path_node = search_node(path_tree, ntohs(session_obj->tunnel_id), compare_path_del);
@@ -163,12 +189,12 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
             pthread_mutex_lock(&resv_tree_mutex);
             db_node *resv_node = search_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del);
             if(resv_node == NULL){
-                temp = resv_tree_insert(resv_tree, buffer, p->p_nexthop_ip, 1);
+                temp = resv_tree_insert(resv_tree, buffer, p->p_srcip, 1);
                 if(temp != NULL) {
                     resv_tree = temp;
-		    display_tree_debug(resv_tree, 0);
                 }
             }
+            display_tree_debug(resv_tree, 0);
 	    pthread_mutex_unlock(&resv_tree_mutex);
 
             send_resv_message(sock, ntohs(session_obj->tunnel_id));
@@ -183,7 +209,6 @@ void receive_path_message(int sock, char buffer[], struct sockaddr_in sender_add
 void send_path_message(int sock, uint16_t tunnel_id) {
     struct sockaddr_in dest_addr;
     char path_packet[PATH_PACKET_SIZE];
-    char nhip[16];
 
     struct rsvp_header *path = (struct rsvp_header*)path_packet;
     //struct class_obj *class_obj = (struct class_obj*)(path_packet + START_SENT_CLASS_OBJ); 
@@ -204,6 +229,7 @@ void send_path_message(int sock, uint16_t tunnel_id) {
 	log_message("tunnel id %d not found\n", tunnel_id);
 	return;
     }
+    display_tree_debug(path_tree, 1);
     path_msg *p = (path_msg*)path_node->data;
 
     log_message("PATH message next hop %s   \n", inet_ntoa(p->nexthop_ip));
@@ -228,7 +254,7 @@ void send_path_message(int sock, uint16_t tunnel_id) {
     hop_obj->class_obj.class_num = 3;
     hop_obj->class_obj.c_type = 1;
     hop_obj->class_obj.length = htons(sizeof(struct hop_object));
-    hop_obj->next_hop = p->nexthop_ip;
+    hop_obj->next_hop = p->e_srcip;
     hop_obj->IFH = htonl(p->IFH);
 
     time_obj->class_obj.class_num = 5;
@@ -260,18 +286,20 @@ void send_path_message(int sock, uint16_t tunnel_id) {
     sender_temp_obj->Reserved = 0;
     sender_temp_obj->LSP_ID = htons(p->lsp_id);
 
+    //adding checksum
+    path->checksum = calculate_checksum(path_packet, PATH_PACKET_SIZE);
     // Set destination (egress router)
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr = hop_obj->next_hop;
+    dest_addr.sin_addr = p->nexthop_ip;
     dest_addr.sin_port = 0;
 
     // Send PATH message
     if (sendto(sock, path_packet, sizeof(path_packet), 0, 
                 (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
-	log_message("PATH message failed to send to %s\n", inet_ntoa(hop_obj->next_hop));
+	log_message("PATH message failed to send to %s\n", inet_ntoa(p->nexthop_ip));
         perror("Send failed");
     } else {
-        log_message("Sent PATH message to %s\n", inet_ntoa(hop_obj->next_hop));
+        log_message("Sent PATH message to %s\n", inet_ntoa(p->nexthop_ip));
     }
 }
 
@@ -290,14 +318,9 @@ void get_resv_class_obj(int class_obj_arr[]) {
 // Function to receive an RSVP-TE RESV message
 void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_addr) {
 
-    struct class_obj *class_obj;
-    int class_obj_arr[10]; 
-    int i = 0;
-    char src_ip[16], dst_ip[16];
-    struct in_addr sender_ip, receiver_ip;
-    char d_ip[16], n_ip[16];
-    uint16_t tunnel_id;
     db_node *temp = NULL;
+    char n_ip[16];
+    uint8_t new_insert = 0;
 
     struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
     struct label_object *label_obj = (struct label_object*)(buffer + START_RECV_LABEL);
@@ -322,32 +345,32 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
     pthread_mutex_lock(&resv_tree_mutex);
     db_node *resv_node = search_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del);
     if(resv_node == NULL){
-        temp = resv_tree_insert(resv_tree, buffer, pa->p_nexthop_ip, 0);
+        temp = resv_tree_insert(resv_tree, buffer, pa->p_srcip, 0);
         if(temp != NULL) {
+            new_insert = 1;
             resv_tree = temp;
             resv_node = search_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del);
-	    display_tree_debug(resv_tree, 0);
         }
     }
+    display_tree_debug(resv_tree, 0);
     pthread_mutex_unlock(&resv_tree_mutex);
 
     //check whether we have reached the head of RSVP tunnel
     //If not reached continue distributing the label  
  
     char command[200];
-    if(resv_node != NULL) {
-        resv_msg *p = (resv_msg*)resv_node->data;
+    resv_msg *p = (resv_msg*)resv_node->data;
+    if(resv_node != NULL && new_insert) {
 	
 	log_message("send resv tunnel id  %d next hop is %s \n",ntohs(session_obj->tunnel_id), inet_ntoa(p->nexthop_ip));
 
-
-    struct in_addr net, mask;
+        struct in_addr net, mask;
         char network[16];
         mask.s_addr = htonl(~((1 << (32 - pa->prefix_len)) - 1));
-        net.s_addr = pa->dest_ip.s_addr & mask.s_addr;
+        net.s_addr = p->dest_ip.s_addr & mask.s_addr;
 
         inet_ntop(AF_INET, &net, network, 16);
-        inet_ntop(AF_INET, &pa->nexthop_ip, n_ip, 16);
+        inet_ntop(AF_INET, &p->p_srcip, n_ip, 16);
 
         if(strcmp(inet_ntoa(p->nexthop_ip),"0.0.0.0") == 0) {
             log_message("****reached the source, end oF rsvp tunnel***\n");
@@ -369,11 +392,16 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
                 log_message(" ========== 3 %s ", command);
                 system(command);
             }
-            log_message("send resv msg to nexthop \n");
-            send_resv_message(sock, ntohs(session_obj->tunnel_id));
+            //log_message("send resv msg to nexthop \n");
+            //send_resv_message(sock, ntohs(session_obj->tunnel_id));
         }
     }
-}
+    if(strcmp(inet_ntoa(p->nexthop_ip),"0.0.0.0") != 0) {
+        log_message("send resv msg to nexthop \n");
+	send_resv_message(sock, ntohs(session_obj->tunnel_id));
+    }
+    new_insert = 0;
+}	
 
 
 
@@ -408,3 +436,272 @@ void get_ip(char buffer[], char sender_ip[], char receiver_ip[], uint16_t *tunne
     //log_message(" dst ip is %s \n", receiver_ip);
 }
 
+int match_path_state(path_msg *msg, struct session_object *session_obj, struct hop_object *hop_obj,
+                     struct sender_temp_object *sender_temp_obj) {
+
+    if ((msg->dest_ip.s_addr != session_obj->dst_ip.s_addr) ||
+        (msg->tunnel_id != ntohs(session_obj->tunnel_id)) ||
+        (msg->src_ip.s_addr != session_obj->src_ip.s_addr)) {
+        log_message("Session object in the path state do not match in pathtear\n");
+        return 0;
+    }
+
+    if (msg->p_srcip.s_addr != hop_obj->next_hop.s_addr) {
+        log_message("Hop object in the path state do not match in pathtear\n");
+        return 0;
+    }
+
+    if ((msg->src_ip.s_addr != sender_temp_obj->src_ip.s_addr) ||
+        (msg->lsp_id != ntohs(sender_temp_obj->LSP_ID))) {
+        log_message("sender template object in the path state do not match in pathtear\n");
+        return 0;
+    }
+
+    log_message("All the path state object are matched in pathtear\n");
+    // All fields matched
+    return 1;
+}
+
+int match_resv_state(resv_msg *msg, struct session_object *session_obj, struct hop_object *hop_obj) {
+
+    if ((msg->dest_ip.s_addr != session_obj->dst_ip.s_addr) ||
+        (msg->tunnel_id != ntohs(session_obj->tunnel_id)) ||
+        (msg->src_ip.s_addr != session_obj->src_ip.s_addr)) {
+        log_message("Session object in the resv state do not match in resvtear\n");
+        return 0;
+    }
+    //FIX: Need to add this after the proper IFH is handled in path and resv state
+    /*if (msg->IFH != ntohl(hop_obj->IFH)) {
+        log_message("resv state IFH:%d  resvtear IFH:%d\n",ntohl(msg->IFH), ntohl(hop_obj->IFH));
+        log_message("Hop object in the resv state do not match in resvtear\n");
+        return 0;
+    }*/
+
+    log_message("All the resv state object are matched in resvtear\n");
+    // All fields matched
+    return 1;
+}
+
+//Function to send PATHTEAR message for label request
+void send_pathtear_message(int sock, uint16_t tunnel_id) {
+
+    struct sockaddr_in dest_addr;
+    char pathtear_packet[PATHTEAR_PKT_SIZE];
+    struct rsvp_header *pathtear = (struct rsvp_header*)pathtear_packet;
+    //struct class_obj *class_obj = (struct class_obj*)(path_packet + START_SENT_CLASS_OBJ);
+    struct session_object *session_obj = (struct session_object*)(pathtear_packet + START_SENT_SESSION_OBJ);
+    struct hop_object *hop_obj = (struct hop_object*)(pathtear_packet + START_SENT_HOP_OBJ);
+    struct sender_temp_object *sender_temp_obj = (struct sender_temp_object*)(pathtear_packet +
+                                                  SENT_PATHTEAR_SENDER_TEMP_OBJ);
+
+    memset(pathtear_packet, 0, sizeof(pathtear_packet));
+    log_message("inside send_pathtear_message\n");
+
+    pthread_mutex_lock(&path_tree_mutex);
+    db_node *path_node = search_node(path_tree, tunnel_id, compare_path_del);
+    pthread_mutex_unlock(&path_tree_mutex);
+    if (path_node == NULL) {
+        log_message("tunnel id %d not found\n", tunnel_id);
+        return;
+    }
+    display_tree_debug(path_tree, 1);
+    path_msg *p = (path_msg*)path_node->data;
+
+    log_message("PATHTEAR message next hop %s   \n", inet_ntoa(p->nexthop_ip));
+
+    // Populate RSVP PATHTEAR header
+    pathtear->version_flags = 0x10;  // RSVP v1
+    pathtear->msg_type = PATHTEAR_MSG_TYPE;
+    pathtear->length = htons(sizeof(pathtear_packet));
+    pathtear->checksum = 0;
+    pathtear->ttl = 255;
+    pathtear->reserved = 0;
+
+    //session object for PATHTEAR msg
+    session_obj->class_obj.class_num = 1;
+    session_obj->class_obj.c_type = 7;
+    session_obj->class_obj.length = htons(sizeof(struct session_object));
+    session_obj->dst_ip = p->dest_ip;
+    session_obj->tunnel_id = htons(p->tunnel_id);
+    session_obj->src_ip = p->src_ip;
+
+    //hop object for PATHTEAR  msg
+    hop_obj->class_obj.class_num = 3;
+    hop_obj->class_obj.c_type = 1;
+    hop_obj->class_obj.length = htons(sizeof(struct hop_object));
+    hop_obj->next_hop = p->e_srcip;
+    hop_obj->IFH = htonl(p->IFH);
+
+    //Sender template object for PATHTEAR msg
+    sender_temp_obj->class_obj.class_num = 11;
+    sender_temp_obj->class_obj.c_type = 7;
+    sender_temp_obj->class_obj.length = htons(sizeof(struct sender_temp_object));
+    sender_temp_obj->src_ip = p->src_ip;
+    sender_temp_obj->Reserved = 0;
+    sender_temp_obj->LSP_ID = htons(p->lsp_id);
+
+    // Set destination (egress router)
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_addr = p->nexthop_ip;
+    dest_addr.sin_port = 0;
+
+    // Send PATHTEAR message
+    if (sendto(sock, pathtear_packet, sizeof(pathtear_packet), 0,
+                (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
+	log_message("PATHTEAR message failed to send to %s\n", inet_ntoa(p->nexthop_ip));
+        perror("Send failed");
+    } else {
+        log_message("Sent PATHTEAR message to %s\n", inet_ntoa(p->nexthop_ip));
+    }
+}
+
+// Function to receive RSVP-TE PATHTEAR messages
+void receive_pathtear_message(int sock, char buffer[], struct sockaddr_in sender_addr) {
+
+    //struct rsvp_header *rsvp = (struct rsvp_header*)(buffer + IP);
+    struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
+    struct hop_object *hop_obj = (struct hop_object*)(buffer + START_RECV_HOP_OBJ);
+    struct sender_temp_object *sender_temp_obj = (struct sender_temp_object*)(buffer +
+                                                  RECV_PATHTEAR_SENDER_TEMP_OBJ);
+
+    log_message("Received PATHTEAR message from %s\n", inet_ntoa(sender_addr.sin_addr));
+
+    pthread_mutex_lock(&path_tree_mutex);
+    db_node *path_node = search_node(path_tree, ntohs(session_obj->tunnel_id), compare_path_del);
+    display_tree_debug(path_tree, 1);
+    pthread_mutex_unlock(&path_tree_mutex);
+    if(path_node == NULL){
+       log_message("No Path state for tunnel:%d discard the Pathtear message \n", ntohs(session_obj->tunnel_id));
+       return;
+    } else {
+        path_msg *p = (path_msg*)path_node->data;
+        if (match_path_state(p, session_obj, hop_obj, sender_temp_obj)) {
+            if (strcmp(inet_ntoa(p->nexthop_ip), "0.0.0.0") == 0) {
+                log_message("****reached the destiantion, end oF rsvp tunnel***\n");
+                pthread_mutex_lock(&resv_tree_mutex);
+                db_node *resv_node = search_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del);
+                pthread_mutex_unlock(&resv_tree_mutex);
+                if(resv_node != NULL) {
+                    log_message("start send resvtear msg to nexthop \n");
+                    send_resvtear_message(sock, ntohs(session_obj->tunnel_id));
+                    pthread_mutex_lock(&resv_tree_mutex);
+                    resv_tree = delete_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del, 0);
+		    display_tree_debug(resv_tree, 0);
+                    pthread_mutex_unlock(&resv_tree_mutex);
+                }
+
+            } else {
+                log_message("send pathtear msg to nexthop \n");
+                send_pathtear_message(sock, ntohs(session_obj->tunnel_id));
+            }
+            pthread_mutex_lock(&path_tree_mutex);
+            path_tree = delete_node(path_tree, ntohs(session_obj->tunnel_id), compare_path_del, 1);
+            display_tree_debug(path_tree, 1);
+            pthread_mutex_unlock(&path_tree_mutex);
+        } else {
+            log_message("Path state objects are not matching discard PATHTEAR\n");
+            return;
+        }
+    }
+
+}
+
+// Function to send an RSVP-TE RESVTEAR message with label assignment
+void send_resvtear_message(int sock, uint16_t tunnel_id) {
+
+    struct sockaddr_in dest_addr;
+    char resvtear_packet[RESVTEAR_PKT_SIZE];
+
+    log_message("inside send_resvtear_message\n");
+    struct rsvp_header *resvtear = (struct rsvp_header*)resvtear_packet;
+    //struct class_obj *class_obj = (struct class_obj*)(resv_packet + sizeof(struct rsvp_header));
+    struct session_object *session_obj = (struct session_object*)(resvtear_packet + START_SENT_SESSION_OBJ);
+    struct hop_object *hop_obj = (struct hop_object*)(resvtear_packet + START_SENT_HOP_OBJ);
+
+    memset(resvtear_packet, 0, sizeof(resvtear_packet));
+    pthread_mutex_lock(&resv_tree_mutex);
+    db_node *resv_node = search_node(resv_tree, tunnel_id, compare_resv_del);
+    pthread_mutex_unlock(&resv_tree_mutex);
+    if (resv_node == NULL) {
+        log_message("tunnel id %d not found\n", tunnel_id);
+        return;
+    }
+    resv_msg *p = (resv_msg*)resv_node->data;
+
+    log_message("RESVTEAR message next hop %s   \n", inet_ntoa(p->e_srcip));
+    // Populate RSVP RESVTEAR header
+    resvtear->version_flags = 0x10;  // RSVP v1
+    resvtear->msg_type = RESVTEAR_MSG_TYPE;
+    resvtear->length = htons(sizeof(resvtear_packet));
+    resvtear->checksum = 0;
+    resvtear->ttl = 255;
+    resvtear->reserved = 0;
+
+    // session object for RESVTEAR msg
+    session_obj->class_obj.class_num = 1;
+    session_obj->class_obj.c_type = 7;
+    session_obj->class_obj.length = htons(sizeof(struct session_object));
+    session_obj->dst_ip = p->dest_ip;
+    session_obj->tunnel_id =  htons(p->tunnel_id);
+    session_obj->src_ip = p->src_ip;
+
+    //hop object for RESVTEAR msg
+    hop_obj->class_obj.class_num = 3;
+    hop_obj->class_obj.c_type = 1;
+    hop_obj->class_obj.length = htons(sizeof(struct hop_object));
+    hop_obj->next_hop = p->e_srcip;
+    hop_obj->IFH = htonl(p->IFH);
+
+    // Set destination (ingress router)
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_addr = p->nexthop_ip;
+    dest_addr.sin_port = 0;
+
+    // Send RESVTEAR message
+    if (sendto(sock, resvtear_packet, sizeof(resvtear_packet), 0,
+                (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
+        perror("Send failed");
+    } else {
+        log_message("Sent RESVTEAR message to %s \n", inet_ntoa(p->nexthop_ip));
+    }
+}
+
+// Function to receive an RSVP-TE RESVTEAR message
+void receive_resvtear_message(int sock, char buffer[], struct sockaddr_in sender_addr) {
+
+    struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
+    struct hop_object *hop_obj = (struct hop_object*)(buffer + START_RECV_HOP_OBJ);
+    log_message("Received RESVTEAR message from %s\n", inet_ntoa(sender_addr.sin_addr));
+
+    pthread_mutex_lock(&resv_tree_mutex);
+    db_node *resv_node = search_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del);
+    display_tree_debug(resv_tree, 0);
+    pthread_mutex_unlock(&resv_tree_mutex);
+    if(resv_node == NULL){
+       log_message("No Resv state for tunnel:%d discard the Resvtear message \n",
+              ntohs(session_obj->tunnel_id));
+       return;
+    } else {
+    //check whether we have reached the head of RSVP tunnel
+    //If not reached continue sending ResvTear
+        resv_msg *p = (resv_msg*)resv_node->data;
+        if (match_resv_state(p, session_obj, hop_obj)) {
+            if (strcmp(inet_ntoa(p->nexthop_ip),"0.0.0.0") == 0) {
+                log_message("****reached the source, end oF rsvp tunnel***\n");
+            } else {
+                log_message("send resvtear msg to nexthop \n");
+                send_resvtear_message(sock, ntohs(session_obj->tunnel_id));
+            }
+            pthread_mutex_lock(&resv_tree_mutex);
+            //FIX: Need to be called after the fix for delete mpls routes is implemented
+            //update_tables(ntohs(session_obj->tunnel_id));
+            resv_tree = delete_node(resv_tree, ntohs(session_obj->tunnel_id), compare_resv_del, 0);
+	    display_tree_debug(resv_tree, 0);
+            pthread_mutex_unlock(&resv_tree_mutex);
+        } else {
+            log_message("Resv state objects are not matching discard RESVTEAR\n");
+            return;
+        }
+    }
+
+}

@@ -24,13 +24,11 @@
 #include "log.h"
 
 struct session* sess = NULL;
-struct session* head = NULL;
 time_t now = 0;
 char nhip[16];
 char source_ip[16];
 char destination_ip[16];
 char next_hop_ip[16];
-char dev[16];
 
 struct session* path_head = NULL;
 struct session* resv_head = NULL;
@@ -60,7 +58,7 @@ struct session* insert_session(struct session* sess, uint16_t t_id, char sender[
     log_message("insert session\n");
     if(sess == NULL) {
         struct session *temp = (struct session*)malloc(sizeof(struct session));
-        if(temp < 0){
+        if(temp == NULL){
             log_message("cannot allocate dynamic memory]n");
             return NULL;
         }
@@ -75,7 +73,7 @@ struct session* insert_session(struct session* sess, uint16_t t_id, char sender[
         return temp;
     } else {
         struct session *temp = (struct session*)malloc(sizeof(struct session));
-        if(sess < 0)
+        if(sess == NULL)
             log_message("cannot allocate dynamic memory\n");
 
         temp->last_path_time = now;
@@ -91,27 +89,30 @@ struct session* insert_session(struct session* sess, uint16_t t_id, char sender[
 }
 
 
-struct session* delete_session(struct session* head, struct session* sess, struct session* prev) { 
+struct session* delete_session(struct session* head, struct session** sess, struct session** prev) { 
 
     struct session *temp = NULL;
 
     if( head == NULL)
         return NULL;
 
-    if(head == sess) { 
+    if(head == *sess) {
         temp = head;
         head = head->next;
         free(temp);
+        *sess = NULL;
         return head;
     } else {
-        temp = sess->next;
+        temp = (*sess)->next;
         if(temp == NULL) {
             print_session(head);
-            prev->next = NULL;
+            (*prev)->next = NULL;
             free(sess);
+            *sess = NULL;
             return head;
         }
-        *sess = *sess->next;
+        (*prev)->next = temp;
+        *sess = NULL;
         free(temp);
         return head;
     }
@@ -128,6 +129,26 @@ void print_session (struct session* head) {
     }
 } 
 
+void delete_session_state(struct session** head, uint16_t tunnel_id ) {
+    struct session* temp = *head;
+    struct session* prev = NULL;
+
+    while (temp != NULL){
+        if (temp->tunnel_id == tunnel_id) {
+            if (prev == NULL) {
+                //Deleting head
+                *head = temp->next;
+            } else {
+                prev->next = temp->next;
+            }
+            free(temp);
+            return;
+        }
+        prev = temp;
+        temp = temp->next;
+    }
+    log_message("Delete:No session state for tunnel:%d\n", tunnel_id);
+}
 
 void insert(char buffer[], uint8_t type) {
     char sender_ip[16], receiver_ip[16];
@@ -330,19 +351,16 @@ db_node* delete_node(db_node* node, uint16_t tunnel_id, int (*cmp)(uint16_t , co
             }
 
         } else {
-            db_node* successor = min_node(node->right);
-            void* data_to_keep_in_node = successor->data;
-            void* data_to_be_removed = node->data;
-            node->data = data_to_keep_in_node;
-            successor->data = data_to_be_removed;
-            uint16_t tunnel_id_to_remove = 0;
-            if (msg && data_to_be_removed != NULL) {
-                tunnel_id_to_remove = ((path_msg *)data_to_be_removed)->tunnel_id;
-            } else if (!msg && data_to_be_removed != NULL) {
-                tunnel_id_to_remove = ((resv_msg *)data_to_be_removed)->tunnel_id;
-            }
-            if (data_to_be_removed != NULL) {
-                node->right = delete_node(node->right, tunnel_id_to_remove, cmp, msg);
+            db_node* temp = min_node(node->right);
+            void* data_keep = temp->data;
+            void* data_remove = node->data;
+            node->data = data_keep;
+            temp->data = data_remove;
+
+            if (msg && data_remove != NULL) {
+                node->right = delete_node(node->right, ((path_msg *)data_remove)->tunnel_id, cmp, msg);
+            } else if (!msg && data_remove != NULL) {
+                node->right = delete_node(node->right, ((resv_msg *)data_remove)->tunnel_id, cmp, msg);
             }
         }
     }
@@ -386,66 +404,49 @@ db_node* search_node(db_node *node, uint16_t data, int (*cmp)(uint16_t, const vo
 }
 
 
-void update_tables(uint16_t tunnel_id) {
-
+void update_tables(void *arg) {
+    ThreadArgs *p = (ThreadArgs*)arg;
     char d_ip[16], n_ip[16], command[200];
-    resv_msg* p;
-    path_msg* pa;
 
-    db_node* temp1 = search_node(resv_tree, tunnel_id, compare_resv_del);
-    if( temp1 != NULL)
-        p = (resv_msg*)temp1->data;
-    else {
-        log_message("tunnel id %d not founD\n", tunnel_id); 	
-        return;
-    }
+    //resv_msg *p = (resv_msg*)resv_node->data;
+    
+    struct in_addr net, mask;
+    char network[16];
 
-    /*db_node* temp2 = search_node(path_tree, tunnel_id, compare_path_del);
-      if(temp2 != NULL)
-      pa = (path_msg*)temp2->data;
-    //update path table
-    if(get_nexthop(inet_ntoa(pa->dest_ip), nhip, &pa->prefix_len, dev, &pa->IFH)) {
-    if (strcmp(nhip, " ") == 0) {
-    inet_pton(AF_INET, "0.0.0.0", &pa->nexthop_ip);
-    } else {
-    inet_pton(AF_INET, nhip, &pa->nexthop_ip);
-    }
-    } else {
-    log_message("No route to destiantion %s\n", inet_ntoa(pa->dest_ip));
-    }
-    else 
-    return;
-    */
+    mask.s_addr = htonl(~((1 << (32 - p->prefix_len)) - 1));
+    net.s_addr = p->dest_ip.s_addr & mask.s_addr; 
 
-    inet_ntop(AF_INET, &p->dest_ip, d_ip, 16);
-    inet_ntop(AF_INET, &p->nexthop_ip, n_ip, 16);
+    inet_ntop(AF_INET, &net, network, 16);
+    inet_ntop(AF_INET, &p->p_srcip, n_ip, 16);
 
     //update LFIB table
     if(p->in_label == -1 && (p->out_label >= BASE_LABEL)) {
         //push label delete
         snprintf(command, sizeof(command), "ip route del %s/%d encap mpls %d via %s dev %s",
-                d_ip, p->prefix_len, (p->out_label), n_ip, p->dev);
+                network, p->prefix_len, (p->out_label), n_ip, p->dev);
         log_message(" ========== 1 %s \n", command);
+	system(command);
     } else if(p->in_label >= BASE_LABEL && p->out_label >= BASE_LABEL) {
         //swap label delete
         snprintf(command, sizeof(command), "ip -M route del %d as %d via inet %s",
                 (p->in_label), (p->out_label), n_ip);
         log_message(" ========== 3 %s - ", command);
         system(command);
-    } else if(p->in_label > BASE_LABEL && (p->out_label == IMPLICIT_NULL || p->out_label == EXPLICIT_NULL)) {
+    } else if(p->in_label >= BASE_LABEL && (p->out_label == IMPLICIT_NULL || p->out_label == EXPLICIT_NULL)) {
         //explicit label =  3 delete
         snprintf(command, sizeof(command), "ip -M route del %d via inet %s dev %s",
-                (p->in_label), n_ip, pa->dev);
+                (p->in_label), n_ip, p->dev);
         log_message(" ========== 2 %s - ", command);
         system(command);
     } else {
         //not a valid label
     }
 
+    free(p);
+
     //update labels
     free_label(p->in_label);
 }
-
 
 /* Free a path tree */
 void free_tree(db_node *node) {
@@ -485,8 +486,8 @@ void display_tree(db_node *node, uint8_t msg, char *buffer, size_t buffer_size) 
         inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16);
         snprintf(temp, sizeof(temp),
                 "Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s, In_label: %d, Out_label: %d\n",
-                r->tunnel_id, source_ip, destination_ip, next_hop_ip, ntohl(r->in_label),
-                ntohl(r->out_label));
+                r->tunnel_id, source_ip, destination_ip, next_hop_ip, r->in_label,
+                r->out_label);
     }
 
     // Append to buffer, ensuring we don't overflow
@@ -498,6 +499,7 @@ void display_tree(db_node *node, uint8_t msg, char *buffer, size_t buffer_size) 
 
 /* Display path tree (inorder traversal) */
 void display_tree_debug(db_node *node, uint8_t msg) {
+    char Psrcip[16], Esrcip[16];
     if (node == NULL){ 
         log_message("No nodes in tree");
         return;
@@ -508,21 +510,29 @@ void display_tree_debug(db_node *node, uint8_t msg) {
         inet_ntop(AF_INET, &p->src_ip, source_ip, 16);
         inet_ntop(AF_INET, &p->dest_ip, destination_ip, 16);
         inet_ntop(AF_INET, &p->nexthop_ip, next_hop_ip, 16);
-        log_message("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s\n",
+        inet_ntop(AF_INET, &p->p_srcip, Psrcip, 16);
+        inet_ntop(AF_INET, &p->e_srcip, Esrcip, 16);
+        log_message("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s Psrcip = %s Esrcip = %s\n",
                 p->tunnel_id,
                 source_ip,
                 destination_ip,
-                next_hop_ip);
+                next_hop_ip,
+                Psrcip,
+                Esrcip);
     } else {
         resv_msg* r = node->data;
         inet_ntop(AF_INET, &r->src_ip, source_ip, 16);
         inet_ntop(AF_INET, &r->dest_ip, destination_ip, 16);
         inet_ntop(AF_INET, &r->nexthop_ip, next_hop_ip, 16);
-        log_message("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s, prefix_len: %d, In_label: %d, Out_label: %d\n",
+        inet_ntop(AF_INET, &r->p_srcip, Psrcip, 16);
+        inet_ntop(AF_INET, &r->e_srcip, Esrcip, 16);
+        log_message("Tunnel ID: %u, Src: %s, Dest: %s, Next Hop: %s, Psrcip = %s, Esrcip = %s, prefix_len: %d, In_label: %d, Out_label: %d\n",
                 r->tunnel_id,
                 source_ip,
                 destination_ip,
                 next_hop_ip,
+                Psrcip,
+                Esrcip,
                 r->prefix_len,
                 (r->in_label),
                 (r->out_label));
@@ -533,11 +543,11 @@ void display_tree_debug(db_node *node, uint8_t msg) {
 //Fetch information from receive buffer
 //-------------------------------------
 
-db_node* path_tree_insert(db_node* path_tree, char buffer[], struct in_addr p_nhip) {
+db_node* path_tree_insert(db_node* path_tree, char buffer[]) {
     uint32_t ifh = 0;
     uint8_t prefix_len = 0;
-    char next_hop_ip[16];
     char dev[16];
+    char srcip[16];
 
     struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
     struct hop_object *hop_obj = (struct hop_object*)(buffer + START_RECV_HOP_OBJ);
@@ -549,7 +559,7 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[], struct in_addr p_nh
     p->tunnel_id = htons(session_obj->tunnel_id);
     p->src_ip = (session_obj->src_ip);
     p->dest_ip = (session_obj->dst_ip);
-    p->p_nexthop_ip = p_nhip;
+    p->p_srcip = hop_obj->next_hop;
     p->interval = time_obj->interval;
     p->setup_priority = session_attr_obj->setup_prio;
     p->hold_priority = session_attr_obj->hold_prio;
@@ -560,17 +570,24 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[], struct in_addr p_nh
 
     if(get_nexthop(inet_ntoa(p->dest_ip), nhip, &prefix_len, dev, &ifh)) {
         strcpy(p->dev, dev);
-        p->IFH = ifh;
+        //p->IFH = ifh;
         if(strcmp(nhip, " ") == 0) {
             inet_pton(AF_INET, "0.0.0.0", &p->nexthop_ip);
+            inet_pton(AF_INET, "0.0.0.0", &p->e_srcip);
+            p->IFH = 0;
             p->prefix_len = prefix_len;
         }
         else {
             inet_pton(AF_INET, nhip, &p->nexthop_ip);
             p->prefix_len = prefix_len;
+            if(get_srcip(nhip, srcip, &ifh)) {
+                inet_pton(AF_INET, srcip, &p->e_srcip);
+                p->IFH = ifh;
+            }
         }
     } else {
         log_message("No route to destination\n");
+        free(p);
         return NULL;
     }
 
@@ -580,7 +597,7 @@ db_node* path_tree_insert(db_node* path_tree, char buffer[], struct in_addr p_nh
 db_node* resv_tree_insert(db_node* resv_tree, char buffer[], struct in_addr p_nhip, uint8_t path_dst_reach) {
 
     uint32_t ifh = 0;
-    uint8_t prefix_len = 0;
+    char srcip[16], nhip[16];
 
     struct session_object *session_obj = (struct session_object*)(buffer + START_RECV_SESSION_OBJ);
     struct hop_object *hop_obj = (struct hop_object*)(buffer + START_RECV_HOP_OBJ);
@@ -595,34 +612,32 @@ db_node* resv_tree_insert(db_node* resv_tree, char buffer[], struct in_addr p_nh
     p->nexthop_ip = p_nhip; 
     p->interval = time_obj->interval;
 
+    inet_ntop(AF_INET, &p->nexthop_ip, nhip, INET_ADDRSTRLEN);
     if(path_dst_reach) {
         p->in_label = (3);
         p->out_label = (-1);
-        //	p->prefix_len = prefix_len;
+        inet_pton(AF_INET, "0.0.0.0", &p->p_srcip);
+        if(get_srcip(nhip, srcip, &ifh)) {
+            inet_pton(AF_INET, srcip, &p->e_srcip);
+            p->IFH = ifh;
+        }
     }
 
-    /*    if (get_nexthop(inet_ntoa(p->src_ip), nhip, &prefix_len,dev, &ifh)) {
-          strcpy(p->dev, dev);
-          p->IFH = ifh;
-          p->prefix_len = prefix_len;
-          log_message("prefix_len = %d\n", prefix_len);
-          */        if(!path_dst_reach) {
-              p->out_label = ntohl(label_obj->label);
-          }
-          if(strcmp(inet_ntoa(p->nexthop_ip), "0.0.0.0") == 0) {
-              if(!path_dst_reach)
-                  p->in_label = (-1);
-              //inet_pton(AF_INET, nhip, &p->nexthop_ip);
-          }
-          else {
-              if(!path_dst_reach)
-                  p->in_label = allocate_label();
-              //inet_pton(AF_INET, nhip, &p->nexthop_ip);
-          }
-          /*} else {
-            log_message("No route to Source\n");
-            return NULL;
-            }*/
+    if(!path_dst_reach) {
+        p->out_label = ntohl(label_obj->label);
+        p->p_srcip = hop_obj->next_hop;
 
-          return insert_node(resv_tree, p, compare_resv_insert, 0);
+        if(strcmp(inet_ntoa(p->nexthop_ip), "0.0.0.0") == 0) {
+            p->in_label = (-1);
+            inet_pton(AF_INET,"0.0.0.0", &p->e_srcip);
+            p->IFH = 0;
+        } else {
+            p->in_label = allocate_label();
+            if(get_srcip(nhip, srcip, &ifh)) {
+                inet_pton(AF_INET, srcip, &p->e_srcip);
+                p->IFH = ifh;
+            }
+        }
+    }
+    return insert_node(resv_tree, p, compare_resv_insert, 0);
 }

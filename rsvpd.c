@@ -34,6 +34,7 @@
 
 #define SOCKET_PATH "/tmp/rsvp_socket"
 #define LOG_FILE_PATH "/tmp/rsvpd.log"
+#define PID_FILE_PATH "/var/run/rsvpd.pid"
 
 struct src_dst_ip *ip = NULL;
 
@@ -60,7 +61,7 @@ void* receive_thread(void* arg) {
     while (1) {
         memset(buffer, 0, sizeof(buffer));
         int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
-                                      (struct sockaddr*)&sender_addr, &addr_len);
+                (struct sockaddr*)&sender_addr, &addr_len);
         if (bytes_received < 0) {
             log_message("Receive failed");
             continue;
@@ -69,6 +70,9 @@ void* receive_thread(void* arg) {
         struct rsvp_header* rsvp = (struct rsvp_header*)(buffer + IP);
         char sender_ip[16], receiver_ip[16];
         uint16_t tunnel_id;
+        if(calculate_checksum(buffer, bytes_received) != rsvp->checksum) {
+            log_message("Unnknown Packet\n");
+        }
 
         log_message("Mutex locked in receive_thread");
         switch (rsvp->msg_type) {
@@ -80,28 +84,28 @@ void* receive_thread(void* arg) {
                 // get ip from the received path packet
                 log_message(" in path msg type\n");
                 get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-		if((reached = dst_reached(receiver_ip)) == -1) {
-                	log_message(" No route to destiantion %s\n",receiver_ip);
-                        return;
+                if((reached = dst_reached(receiver_ip)) == -1) {
+                    log_message(" No route to destiantion %s\n",receiver_ip);
+                    return;
                 }
 
-		pthread_mutex_lock(&path_list_mutex);
+                pthread_mutex_lock(&path_list_mutex);
                 temp = search_session(path_head, tunnel_id);
                 pthread_mutex_unlock(&path_list_mutex);
-		if(temp == NULL) {
-			pthread_mutex_lock(&path_list_mutex);
-	               	path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
- 			pthread_mutex_unlock(&path_list_mutex);
-			if(path_head == NULL) {
-				log_message("insert for tunnel %d failed", tunnel_id);
-				return;
-			}
-		}
-		temp = NULL;
-                
+                if(temp == NULL) {
+                    pthread_mutex_lock(&path_list_mutex);
+                    path_head = insert_session(path_head, tunnel_id, sender_ip, receiver_ip, reached);
+                    pthread_mutex_unlock(&path_list_mutex);
+                    if(path_head == NULL) {
+                        log_message("insert for tunnel %d failed", tunnel_id);
+                        return;
+                    }
+                }
+                temp = NULL;
+
                 receive_path_message(sock,buffer,sender_addr);
-               
-		break;
+
+                break;
 
             case RESV_MSG_TYPE:
 
@@ -110,34 +114,70 @@ void* receive_thread(void* arg) {
 
                 //get ip from the received resv msg
                 log_message(" in resv msg type\n");
-		/*get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
-		if((reached = dst_reached(sender_ip)) == -1) {
-	                log_message(" No route to destiantion %s\n",sender_ip);
-                        return;
-                }
-                
-		pthread_mutex_lock(&resv_list_mutex);
-                temp = search_session(resv_head, tunnel_id);
-                if(temp == NULL) {
-                        resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
-			if(resv_head == NULL) {
-				log_message("insert for tunnel %d failed", tunnel_id);
-                               	return;	
-			}
-                }
-		temp = NULL;
- 	        pthread_mutex_unlock(&resv_list_mutex);
-               	*/ 
+                /*get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                  if((reached = dst_reached(sender_ip)) == -1) {
+                  log_message(" No route to destiantion %s\n",sender_ip);
+                  return;
+                  }
+
+                  pthread_mutex_lock(&resv_list_mutex);
+                  temp = search_session(resv_head, tunnel_id);
+                  if(temp == NULL) {
+                  resv_head = insert_session(resv_head, tunnel_id, sender_ip, receiver_ip, reached);
+                  if(resv_head == NULL) {
+                  log_message("insert for tunnel %d failed", tunnel_id);
+                  return;	
+                  }
+                  }
+                  temp = NULL;
+                  pthread_mutex_unlock(&resv_list_mutex);
+                  */ 
                 receive_resv_message(sock,buffer,sender_addr);
-                
- 		break;
+
+                break;
+
+            case PATHTEAR_MSG_TYPE:
+                //get ip and tunnel id from the received pathtear msg
+                log_message("Received pathtear msg type\n");
+                get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                if((reached = dst_reached(receiver_ip)) == -1) {
+                    log_message(" No route to destiantion %s\n",receiver_ip);
+                    return;
+                }
+
+                receive_pathtear_message(sock, buffer, sender_addr);
+
+                pthread_mutex_lock(&path_list_mutex);
+                log_message("delete path session for tunnel id:%d\n", tunnel_id);
+                delete_session_state(&path_head, tunnel_id);
+                pthread_mutex_unlock(&path_list_mutex);
+
+                break;
+
+            case RESVTEAR_MSG_TYPE:
+                //get ip and tunnel id from the received resvtear msg
+                log_message("Received resvtear msg type\n");
+                get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
+                if((reached = dst_reached(sender_ip)) == -1) {
+                    log_message(" No route to destiantion %s\n",sender_ip);
+                    return;
+                }
+
+                receive_resvtear_message(sock,buffer,sender_addr);
+
+                pthread_mutex_lock(&resv_list_mutex);
+                log_message("delete resv session for tunnel id:%d\n", tunnel_id);
+                delete_session_state(&resv_head, tunnel_id);
+                pthread_mutex_unlock(&resv_list_mutex);
+
+                break;
 
             default: {
 
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Unknown RSVP message type: %d", rsvp->msg_type);
-                log_message(msg);
-	    }
+                         char msg[64];
+                         snprintf(msg, sizeof(msg), "Unknown RSVP message type: %d", rsvp->msg_type);
+                         log_message(msg);
+                     }
         }
         log_message("Mutex unlocking in receive_thread");
     }
@@ -186,7 +226,7 @@ void* ipc_server_thread(void* arg) {
         log_message("bytes %d", bytes);
         if (bytes > 0) {
             buffer[bytes] = '\0';
-            
+
             if (strncmp(buffer, "show path", 9) == 0) {
                 get_path_tree_info(response, sizeof(response));
             } else if (strncmp(buffer, "show resv", 9) == 0) {
@@ -198,7 +238,7 @@ void* ipc_server_thread(void* arg) {
             } else {
                 snprintf(response, sizeof(response), "Unknown command\n");
             }
-            
+
             send(client_sock, response, strlen(response), 0);
         }
         close(client_sock);
@@ -210,8 +250,13 @@ void daemonize() {
     pid_t pid = fork();
     if (pid < 0) exit(1);
     if (pid > 0) exit(0); // Parent exits
-    
+
     setsid();
+    FILE *fp = fopen(PID_FILE_PATH, "w");
+    if (fp) {
+        fprintf(fp, "%d\n", getpid());
+        fclose(fp);
+    }
     umask(0);
     chdir("/");
 

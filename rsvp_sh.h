@@ -27,6 +27,8 @@
 #include<time.h>
 #include<pthread.h>
 #include<unistd.h>
+#include<signal.h>
+#include<errno.h>
 
 // Show API functions 
 void get_path_tree_info(char * , size_t );

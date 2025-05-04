@@ -49,7 +49,8 @@ typedef struct path_msg {
     struct in_addr src_ip;
     struct in_addr dest_ip;
     struct in_addr nexthop_ip;
-    struct in_addr p_nexthop_ip;
+    struct in_addr p_srcip;
+    struct in_addr e_srcip;
     uint16_t tunnel_id;
     uint32_t IFH;
     uint32_t interval;
@@ -67,6 +68,8 @@ typedef struct resv_msg {
     struct in_addr src_ip;
     struct in_addr dest_ip;
     struct in_addr nexthop_ip;
+    struct in_addr e_srcip;
+    struct in_addr p_srcip;
     uint16_t tunnel_id;
     uint32_t IFH;
     uint32_t interval;
@@ -83,6 +86,14 @@ typedef struct db_node {
     int height;
 }db_node;
 
+typedef struct {
+    struct in_addr p_srcip;
+    struct in_addr dest_ip;
+    uint32_t in_label;
+    uint32_t out_label;
+    char dev[16];
+    uint8_t prefix_len;
+}ThreadArgs;
 
 static inline int get_height(db_node *node) {
     return node ? node->height : 0;
@@ -102,7 +113,7 @@ db_node* insert_node(db_node *, void *, cmp_message func, uint8_t);
 db_node* delete_node(db_node *, uint16_t, cmp_tunnel_id func, uint8_t);
 db_node* search_node(db_node *, uint16_t, cmp_tunnel_id func);
 
-void update_tables(uint16_t);
+void update_tables(void*);
 void free_tree(db_node *);
 void display_tree_debug(db_node *, uint8_t);
 void display_tree(db_node * , uint8_t , char * , size_t);
@@ -110,9 +121,10 @@ void display_tree(db_node * , uint8_t , char * , size_t);
 void print_session(struct session*);
 struct session* search_session(struct session*, uint16_t);
 struct session* insert_session(struct session*, uint16_t, char[], char[], uint8_t);
-struct session* delete_session(struct session*, struct session*, struct session*);
+struct session* delete_session(struct session*, struct session**, struct session**);
+void delete_session_state(struct session** , uint16_t);
 void insert(char[], uint8_t);
-db_node* path_tree_insert(db_node*, char[], struct in_addr);
+db_node* path_tree_insert(db_node*, char[]);
 db_node* resv_tree_insert(db_node*, char[], struct in_addr, uint8_t);
 int compare_path_del(uint16_t , const void *);
 int compare_resv_del(uint16_t , const void *);

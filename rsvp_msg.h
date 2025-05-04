@@ -1,5 +1,7 @@
 #define PATH_MSG_TYPE               1   // RSVP-TE PATH Message Type
 #define RESV_MSG_TYPE               2   // RSVP-TE RESV Message Type
+#define PATHTEAR_MSG_TYPE           5   // RSVP-TE PATHTEAR Message Type
+#define RESVTEAR_MSG_TYPE           6   // RSVP-TE RESVTEAR Message Type
 
 #define IP_ADDRLEN                  16
 
@@ -46,6 +48,13 @@
 #define START_RECV_LABEL (IP + START_SENT_LABEL)
 
 #define RESV_PACKET_SIZE (START_SENT_LABEL + sizeof(struct label_object))
+
+// RSVP TEAR
+#define SENT_PATHTEAR_SENDER_TEMP_OBJ (START_SENT_HOP_OBJ + sizeof(struct hop_object))
+#define RECV_PATHTEAR_SENDER_TEMP_OBJ (IP + SENT_PATHTEAR_SENDER_TEMP_OBJ)
+
+#define PATHTEAR_PKT_SIZE (SENT_PATHTEAR_SENDER_TEMP_OBJ + sizeof(struct sender_temp_object))
+#define RESVTEAR_PKT_SIZE (START_SENT_HOP_OBJ + sizeof(struct hop_object))
 
 // RSVP Common Header (Simplified)
 struct rsvp_header {
@@ -138,7 +147,7 @@ struct Filter_spec_object {
 
 
 
-
+uint16_t calculate_checksum(void *, size_t);
 void send_path_message(int, uint16_t);
 void send_resv_message(int, uint16_t);
 void receive_resv_message(int, char[], struct sockaddr_in);
@@ -148,3 +157,8 @@ void get_path_class_obj(int[]);
 int dst_reached(char []);
 void get_ip(char[], char[], char [], uint16_t *);
 extern int get_nexthop(const char *, const char *, uint8_t*, const char *, uint32_t*);
+extern int get_srcip(const char *, const char *, uint32_t*);
+void send_pathtear_message(int, uint16_t);
+void send_resvtear_message(int, uint16_t);
+void receive_pathtear_message(int, char[], struct sockaddr_in);
+void receive_resvtear_message(int, char[], struct sockaddr_in);
