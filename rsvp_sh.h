@@ -38,5 +38,7 @@ void get_resv_tree_info(char * , size_t );
 int rsvp_add_config(const char * , char * , size_t);
 int rsvp_delete_config(const char * , char * , size_t);
 
-path_msg* create_path(const char *, char *, size_t);
-int rsvpsh_main();
+path_msg* create_path(const char * , char * , size_t);
+int create_sock(int * , struct sockaddr_un *);
+int parse_rsvp_cmd(int , char * , size_t);
+int rsvpsh_main(int , char *[]);

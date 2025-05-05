@@ -87,13 +87,13 @@ typedef struct db_node {
 }db_node;
 
 typedef struct {
-    struct in_addr p_srcip;
-    struct in_addr dest_ip;
-    uint32_t in_label;
-    uint32_t out_label;
-    char dev[16];
-    uint8_t prefix_len;
-}ThreadArgs;
+     struct in_addr p_srcip;
+     struct in_addr dest_ip;
+     uint32_t in_label;
+     uint32_t out_label;
+     char     dev[16];
+     uint8_t prefix_len;
+ }ThreadArgs;
 
 static inline int get_height(db_node *node) {
     return node ? node->height : 0;

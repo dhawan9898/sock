@@ -275,8 +275,8 @@ void send_path_message(int sock, uint16_t tunnel_id) {
     session_attr_obj->setup_prio = p->setup_priority;
     session_attr_obj->hold_prio = p->hold_priority;
     session_attr_obj->flags = p->flags;
-    session_attr_obj->name_len = sizeof("PE1");
-    //strcpy("PE1", session_attr_obj->Name);
+    session_attr_obj->name_len = strlen(p->name);
+    strncpy(session_attr_obj->Name, p->name, strlen(p->name)+1);
 
     //Sender template object for PATH msg
     sender_temp_obj->class_obj.class_num = 11;
@@ -333,13 +333,13 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
     db_node *path_node = search_node(path_tree, ntohs(session_obj->tunnel_id), compare_path_del);
     pthread_mutex_unlock(&path_tree_mutex);
     if(path_node == NULL){
-	log_message(" not found path table entry for tunnel id  = %d\n", ntohs(session_obj->tunnel_id));
-	log_message(" return as we cannot get nexthop for the resv\n");
-	return;
+        log_message(" not found path table entry for tunnel id  = %d\n", ntohs(session_obj->tunnel_id));
+        log_message(" return as we cannot get nexthop for the resv\n");
+        return;
     } else {
-	log_message("tunnel id  %d found in the path table \n",ntohs(session_obj->tunnel_id));
-	pa = (path_msg*)path_node->data;
-	insert(buffer, 0);
+        log_message("tunnel id  %d found in the path table \n",ntohs(session_obj->tunnel_id));
+        pa = (path_msg*)path_node->data;
+        insert(buffer, 0);
     }
 
     pthread_mutex_lock(&resv_tree_mutex);
@@ -357,16 +357,20 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
 
     //check whether we have reached the head of RSVP tunnel
     //If not reached continue distributing the label  
- 
+
     char command[200];
     resv_msg *p = (resv_msg*)resv_node->data;
     if(resv_node != NULL && new_insert) {
-	
-	log_message("send resv tunnel id  %d next hop is %s \n",ntohs(session_obj->tunnel_id), inet_ntoa(p->nexthop_ip));
+
+        log_message("send resv tunnel id  %d next hop is %s \n",ntohs(session_obj->tunnel_id), inet_ntoa(p->nexthop_ip));
 
         struct in_addr net, mask;
         char network[16];
-        mask.s_addr = htonl(~((1 << (32 - pa->prefix_len)) - 1));
+
+        p->prefix_len = pa->prefix_len;
+        strcpy(p->dev, pa->dev);
+
+        mask.s_addr = htonl(~((1 << (32 - p->prefix_len)) - 1));
         net.s_addr = p->dest_ip.s_addr & mask.s_addr;
 
         inet_ntop(AF_INET, &net, network, 16);
@@ -376,14 +380,14 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
             log_message("****reached the source, end oF rsvp tunnel***\n");
 
             snprintf(command, sizeof(command), "ip route add %s/%d encap mpls %d via %s dev %s",
-                    network, pa->prefix_len, (p->out_label), n_ip, pa->dev);
+                    network, p->prefix_len, (p->out_label), n_ip, p->dev);
 
             log_message(" ========== 1 %s \n", command);
             system(command);
         } else {
             if(p->out_label == 3) {
                 snprintf(command, sizeof(command), "ip -M route add %d via inet %s dev %s",
-                        (p->in_label), n_ip, pa->dev);
+                        (p->in_label), n_ip, p->dev);
                 log_message(" ========== 2 %s ", command);
                 system(command);
             } else {
@@ -398,7 +402,7 @@ void receive_resv_message(int sock, char buffer[], struct sockaddr_in sender_add
     }
     if(strcmp(inet_ntoa(p->nexthop_ip),"0.0.0.0") != 0) {
         log_message("send resv msg to nexthop \n");
-	send_resv_message(sock, ntohs(session_obj->tunnel_id));
+        send_resv_message(sock, ntohs(session_obj->tunnel_id));
     }
     new_insert = 0;
 }	
@@ -540,6 +544,8 @@ void send_pathtear_message(int sock, uint16_t tunnel_id) {
     sender_temp_obj->Reserved = 0;
     sender_temp_obj->LSP_ID = htons(p->lsp_id);
 
+    //adding checksum
+    pathtear->checksum = calculate_checksum(resv_packet, RESV_PACKET_SIZE);
     // Set destination (egress router)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr = p->nexthop_ip;
@@ -652,6 +658,8 @@ void send_resvtear_message(int sock, uint16_t tunnel_id) {
     hop_obj->next_hop = p->e_srcip;
     hop_obj->IFH = htonl(p->IFH);
 
+    //adding checksum
+    resvtear->checksum = calculate_checksum(resv_packet, RESV_PACKET_SIZE);
     // Set destination (ingress router)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr = p->nexthop_ip;

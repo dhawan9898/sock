@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     if (strcmp(prog_name, "rsvpd") == 0) {
         return rsvpd_main();
     } else if (strcmp(prog_name, "rsvpsh") == 0) {
-        return rsvpsh_main();
+        return rsvpsh_main(argc, argv);
     } else {
         fprintf(stderr, "Run as 'rsvpd' or 'rsvpsh' (e.g., via symlink)\n");
         return EXIT_FAILURE;

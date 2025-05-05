@@ -88,7 +88,6 @@ struct session* insert_session(struct session* sess, uint16_t t_id, char sender[
     }
 }
 
-
 struct session* delete_session(struct session* head, struct session** sess, struct session** prev) { 
 
     struct session *temp = NULL;
@@ -107,7 +106,7 @@ struct session* delete_session(struct session* head, struct session** sess, stru
         if(temp == NULL) {
             print_session(head);
             (*prev)->next = NULL;
-            free(sess);
+            free(*sess);
             *sess = NULL;
             return head;
         }
@@ -159,7 +158,8 @@ void insert(char buffer[], uint8_t type) {
     get_ip(buffer, sender_ip, receiver_ip, &tunnel_id);
     if((reached = dst_reached(sender_ip)) == -1) {
         log_message(" No route to destiantion %s\n",sender_ip);
-        return;
+        reached = 0;
+        //return;
     }
 
 
@@ -402,7 +402,6 @@ db_node* search_node(db_node *node, uint16_t data, int (*cmp)(uint16_t, const vo
         return search_node(node->right, data, cmp);
     }
 }
-
 
 void update_tables(void *arg) {
     ThreadArgs *p = (ThreadArgs*)arg;

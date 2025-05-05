@@ -346,7 +346,41 @@ path_msg* create_path(const char *args, char *response, size_t response_size) {
     return path;
 }
 
-int rsvpsh_main() {
+int parse_rsvp_cmd(int in_config_mode, char *input, size_t input_len){
+
+    if (in_config_mode) {
+        if (strncmp(input, "rsvp add config ", 16) == 0) {
+            snprintf(input, input_len, "add %s", input + 16);
+        } else if (strncmp(input, "rsvp delete config ", 19) == 0) {
+            snprintf(input, input_len, "delete %s", input + 19);
+        } else {
+            printf("Config commands: rsvp add config ..., rsvp delete config ..., exit, --help for manual\n");
+            return -1;
+        }
+    } else if (strncmp(input, "rsvp show ", 10) == 0) {
+        snprintf(input, input_len, "show %s", input + 10);
+    } else {
+        printf("Commands: config, rsvp show [path | resv], exit\n");
+        return -1;
+    }
+    return 0;
+}
+
+int create_sock(int *sock, struct sockaddr_un *addr){
+
+    *sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (*sock < 0) {
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    memset(addr, 0, sizeof(*addr));
+    addr->sun_family = AF_UNIX;
+    strncpy(addr->sun_path, SOCKET_PATH, sizeof(addr->sun_path) - 1);
+    return 0;
+}
+
+int rsvpsh_main(int argc, char *argv[]) {
     int sock;
     struct sockaddr_un addr;
     char input[256], response[MAX_BUFFER];
@@ -360,6 +394,42 @@ int rsvpsh_main() {
            return 1;
         }
 
+    //Non-Interactive Shell Mode or Command Mode
+    if(argc > 2 && (strcmp(argv[1], "-c") == 0 || strcmp(argv[1], "-m") == 0)){
+        if(!strcmp(argv[1], "-m")){
+    		in_config_mode = 1;
+    	}
+        strncpy(input, argv[2], sizeof(input) - 1);
+        input[sizeof(input) - 1] = '\0';
+        
+	if (create_sock(&sock, &addr) < 0){
+	    perror("Socket creation failed");
+	    return -1;
+	}
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("Connection to daemon failed");
+            close(sock);
+            return -1;
+        }
+
+        if(parse_rsvp_cmd(in_config_mode, input, sizeof(input)) < 0){
+            close(sock);
+            return -1;
+        }
+
+        send(sock, input, strlen(input), 0);
+        int bytes = recv(sock, response, sizeof(response) - 1, 0);
+        if (bytes > 0) {
+            response[bytes] = '\0';
+            printf("%s", response);
+        }
+        close(sock);
+
+        return 0;
+    }
+
+    // Interactive shell mode or CLI
     printf("\033[1;32mRSVP Shell (OpenWrt)\033[0m\n");
 
     while (1) {
@@ -390,15 +460,10 @@ int rsvpsh_main() {
             continue;
         }
 
-        sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (sock < 0) {
-            perror("Socket creation failed");
-            continue;
-        }
-
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
+	if (create_sock(&sock, &addr) < 0){
+	    perror("Socket creation failed");
+	    continue;
+	}
 
         if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
             perror("Connection to daemon failed");
@@ -406,20 +471,7 @@ int rsvpsh_main() {
             continue;
         }
 
-        if (in_config_mode) {
-            if (strncmp(input, "rsvp add config ", 16) == 0) {
-                snprintf(input, sizeof(input), "add %s", input + 16);
-            } else if (strncmp(input, "rsvp delete config ", 19) == 0) {
-                snprintf(input, sizeof(input), "delete %s", input + 19);
-            } else {
-                printf("Config commands: rsvp add config ..., rsvp delete config ..., exit, --help for manual\n");
-                close(sock);
-                continue;
-            }
-        } else if (strncmp(input, "rsvp show ", 10) == 0) {
-            snprintf(input, sizeof(input), "show %s", input + 10);
-        } else {
-            printf("Commands: config, rsvp show [path | resv], exit\n");
+        if(parse_rsvp_cmd(in_config_mode, input, sizeof(input)) < 0){
             close(sock);
             continue;
         }

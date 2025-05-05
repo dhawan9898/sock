@@ -331,7 +331,7 @@ int get_nexthop(const char *dst_ip, char *nh_ip, uint8_t *pref_len, char* Dev, i
 
     close (nl_sock);
 
-    if(temp)
+    if(temp == 1)
         return 1;
 
     return 0;
@@ -357,7 +357,7 @@ int get_srcip(const char *nhip, char *srcip, int *Ifh) {
 
     close (nl_sock);
 
-    if(temp)
+    if(temp == 1)
         return 1;
 
     return 0;
