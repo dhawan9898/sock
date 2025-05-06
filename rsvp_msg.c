@@ -545,7 +545,7 @@ void send_pathtear_message(int sock, uint16_t tunnel_id) {
     sender_temp_obj->LSP_ID = htons(p->lsp_id);
 
     //adding checksum
-    pathtear->checksum = calculate_checksum(pathtear_packet, RESV_PACKET_SIZE);
+    pathtear->checksum = calculate_checksum(pathtear_packet, PATHTEAR_PKT_SIZE);
     // Set destination (egress router)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr = p->nexthop_ip;
@@ -659,7 +659,7 @@ void send_resvtear_message(int sock, uint16_t tunnel_id) {
     hop_obj->IFH = htonl(p->IFH);
 
     //adding checksum
-    resvtear->checksum = calculate_checksum(resvtear_packet, RESV_PACKET_SIZE);
+    resvtear->checksum = calculate_checksum(resvtear_packet, RESVTEAR_PKT_SIZE);
     // Set destination (ingress router)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr = p->nexthop_ip;

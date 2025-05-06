@@ -112,7 +112,13 @@ void path_timer_handler(union sigval sv) {
                 if(resv_head != NULL && temp == NULL) {
                     log_message("--------deleted resv session\n");
                     print_session(resv_head);
-                    temp = prev;
+                    if(prev == NULL) {
+                        temp = resv_head;
+                        pthread_mutex_unlock(&resv_list_mutex);
+                        continue;
+                    }
+                    else
+                        temp = prev;
                 } else {
                     if(temp == NULL) {
                         log_message("---------deleted resv session\n");
@@ -199,7 +205,12 @@ void resv_timer_handler(union sigval sv) {
             if(path_head != NULL && temp == NULL) {
                 log_message("--------deleted path session\n");
                 print_session(path_head);
-                temp = prev;
+                if(prev == NULL) {
+                    temp = path_head;
+                    pthread_mutex_unlock(&path_list_mutex);
+                    continue;
+                } else
+                    temp = prev;
             } else {
                 if(temp == NULL) {
                         log_message("---------deleted path session\n");
